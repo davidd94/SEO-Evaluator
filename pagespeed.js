@@ -63,7 +63,6 @@ async function runPagespeedApi() {
         // };
         // console.log(cruxMetrics);
         const lighthouse = json.lighthouseResult;
-        console.log(lighthouse);
         if (lighthouse) {
             const lighthouseMetrics = {
               'First Contentful Paint': lighthouse.audits['first-contentful-paint'],
@@ -167,12 +166,6 @@ async function scrapeElemsAndTest(page) {
 
       };
 
-        const testData = {
-            elementNum: 0,
-            completed: false,
-        };
-        saveToJson(testData, testFileName);
-
         for (let i = 0; i < testElems.length; i++) {
             const testElem = testElems[i];
             console.log(`currently testing: ${testElem.element.tagName}`);
@@ -228,18 +221,33 @@ async function scrapeElemsAndTest(page) {
 };
 
 async function pagespeedEvaluation() {
+    const testFileName = process.env.TEST_FILE_NAME;
     console.log('Evaluating pagespeed....');
 
     // init scrape and download page
-    // await scraper.scrapeAndDownloadPage();
+    await scrape.scrapeAndDownloadPage();
 
     // init git push page
-    // scraper.gitPushScrapeData();
+    scrape.gitPushScrapeData();
+    
+    // create init test data file
+    const testData = {
+        elementNum: -1,
+        completed: false,
+    };
+    saveToJson(testData, testFileName);
 
     // baseline report
-    // const results = await runPagespeedApi();
+    const results = await runPagespeedApi();
+    saveReportAsJson('lh-report-initial', results, timestamp);
 
-    // saveReportAsJson('lh-report-initial', results, timestamp);
+    let currentTestData = await readJson(testFileName);
+
+    while (currentTestData.elementNum === -1) {
+        currentTestData = await readJson(testFileName);
+        await sleep(2000);
+        console.log('Waiting for initial git push to complete...');
+    }
 
     // init browser
     const { browser, page } = await _newBrowser();

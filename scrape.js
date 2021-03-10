@@ -63,11 +63,11 @@ function gitPushScrapeData(folderPath = './baseScrapeData') {
     });
 
     // create folder again
-    fs.mkdir("../seo-testing", (err) => {
-        if (err) {
-            throw err;
-        }
-    });
+    // fs.mkdir("../seo-testing", (err) => {
+    //     if (err) {
+    //         throw err;
+    //     }
+    // });
 
     // copy over new repo files
     fs.copy(folderPath, "../seo-testing", function(err) {

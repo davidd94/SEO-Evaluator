@@ -7,8 +7,7 @@ const fs = require("fs-extra");
 
 const ps = require("./pagespeed");
 const scraper = require("./scrape");
-const { saveToJson, readJson, saveReportAsJson } = require('./utils');
-const { timestamp } = require("./settings");
+const { saveToJson, readJson, saveReportAsJson, sleep } = require('./utils');
 
 // Initialize express and define a port
 const app = express()
@@ -22,33 +21,41 @@ app.use(bodyParser.json())
 
 // Routes
 app.post("/hook", async (req, res) => {
+    console.log(req.body['state']);
+    res.status(200).end(); // Responding to webhooks to prevent auto-disable or spamming events
     // Call your action on the request
     if (req.body['state'] === 'ready') {
         const testFileName = process.env.TEST_FILE_NAME;
         const maxTestNum = process.env.NUM_OF_PAGESPEED_TESTS;
         let currentTestData = await readJson(testFileName);
-        let currentTestNum = 1;
+        console.log('current test elem id: ', currentTestData.elementNum);
+        if (currentTestData.elementNum >= 0) {
+            let currentTestNum = 1;
+            // run test X amount and record
+            while (currentTestNum <= maxTestNum) {
+                console.log('running test: ' + currentTestNum);
+                const timestamp = Date.now();
 
-        // run test X amount and record
-        while (currentTestNum <= maxTestNum) {
-            console.log('running test: ' + currentTestNum);
-            // run pagespeed API
-            const results = await ps.runPagespeedApi();
+                // run pagespeed API
+                const results = await ps.runPagespeedApi();
+        
+                // record results
+                saveReportAsJson(`lh-report-elementID-${currentTestData.elementNum}-test-${currentTestNum}`, results, timestamp);
+        
+                currentTestNum += 1;
+
+                await sleep(3000);
+            };
     
-            // record results
-            saveReportAsJson(`lh-report-elementID-${currentTestData.elementNum}-test-${currentTestNum}`, results, timestamp);
-    
-            currentTestNum += 1;
-        };
-
-        // set completed and save test data file
-        currentTestData.completed = true;
-        saveToJson(currentTestData, testFileName);
-        console.log('Test completed! Starting next element test soon...');
-
-        res.status(200).end(); // Responding is important for webhook events
+            // set completed and save test data file
+            currentTestData.completed = true;
+            saveToJson(currentTestData, testFileName);
+            console.log('Test completed! Starting next element test soon...');
+        } else if (currentTestData.elementNum === -1) {
+            currentTestData.elementNum = 0;
+            saveToJson(currentTestData, testFileName);
+        }
     };
-    res.status(400).end(); // Responding is important for webhook events
 })
 
 app.get("/test", (req, res) => {
@@ -67,4 +74,4 @@ async function startPagespeedEval() {
     console.log('finished evaluating pagespeed...');
 };
 
-// startPagespeedEval();
+startPagespeedEval();
