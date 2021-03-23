@@ -10,9 +10,9 @@ async function scrapeAndDownloadPage(url='', filePath=null) {
     const scrapeDir = path.resolve(__dirname, filePath || 'baseScrapeData');
 
     // check if scrape dir exists to rm
-    fs.access(filePath || "./baseScrapeData", async function(error) {
+    fs.access(filePath || "./baseScrapeData", function(error) {
         if (!error) {
-            await fs.rmdir(scrapeDir, { recursive: true }, (err) => {
+            fs.rmdirSync(scrapeDir, { recursive: true }, (err) => {
                 if (err) {
                     throw err;
                 };
@@ -33,22 +33,35 @@ async function scrapeAndDownloadPage(url='', filePath=null) {
             new PuppeteerPlugin({
                 launchOptions: { 
                     // If you set  this to true, the headless browser will show up on screen
-                    headless: true
-                }, /* optional */
-                scrollToBottom: {
-                    timeout: 10000, 
-                    viewportN: 10 
-                } /* optional */
+                    // executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+                    headless: false,
+                    defaultViewport: null,
+                    arguments: [
+                        // '--single-process',
+                        // '--no-sandbox',
+                    ],
+                },
+                // scrollToBottom: {
+                //     timeout: 30000,
+                //     viewportN: 10
+                // },
+                blockNavigation: true,
             })
         ],
         request: {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 4.2.1; en-us; Nexus 4 Build/JOP40D) AppleWebKit/535.19 (KHTML, like Gecko) Chrome/18.0.1025.166 Mobile Safari/535.19'
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36'
             }
-        }
+        },
+        ignoreErrors: true,
+        requestConcurrency: 3, // need to limit this or else scrape hangs due to network being blocked
+    }, (error) => {
+        console.log(error);
     });
 
     console.log('Successfully scraped the website!');
+
+    return true;
 };
 
 function gitPushScrapeData(folderPath = './baseScrapeData') {
@@ -96,6 +109,7 @@ function gitPushScrapeData(folderPath = './baseScrapeData') {
         });
     });
 
+    return true;
 }
 
 exports.scrapeAndDownloadPage = scrapeAndDownloadPage;

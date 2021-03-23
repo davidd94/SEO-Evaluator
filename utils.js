@@ -58,10 +58,17 @@ async function exposeModuleMethods(page, moduleName) {
         window[moduleName][methodName] = window['__' + moduleName + '_' + methodName]; // alias
       }, moduleName, methodName);
     }
-  }
+};
+
+async function getFileExtension(fileStr) {
+    let file = fileStr.split('/').pop();
+    const ext = file.substr(file.lastIndexOf('.') + 1, file.length);
+    return ext || '';
+}
 
 exports.saveReportAsJson = saveReportAsJson;
 exports.saveToJson = saveToJson;
 exports.readJson = readJson;
 exports.sleep = sleep;
 exports.exposeModuleMethods = exposeModuleMethods;
+exports.getFileExtension = getFileExtension;

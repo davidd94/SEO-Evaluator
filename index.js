@@ -67,11 +67,20 @@ app.get("/test", (req, res) => {
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`))
 
 async function startPagespeedEval() {
-    const results = await ps.pagespeedEvaluation();
-    if (!results) {
-        console.log(results);
-    };
-    console.log('finished evaluating pagespeed...');
+    // const scrapeResults = await scraper.scrapeAndDownloadPage();
+    // const gitResults = scraper.gitPushScrapeData();
+    
+    // if (scrapeResults && gitResults) {
+    //     const results = await ps.pagespeedEvaluation();
+    //     if (!results) {
+    //         console.log(results);
+    //     };
+    //     console.log('finished evaluating pagespeed...');
+    // } else if (!scrapeResults) {
+    //     throw 'Failed to scrape website';
+    // } else if (!gitResults) {
+    //     throw 'Failed to push scraped website to repo';
+    // };
 };
 
 startPagespeedEval();

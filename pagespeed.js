@@ -5,13 +5,13 @@ const fs = require("fs-extra");
 
 const lh = require("./lighthouse");
 const scrape = require("./scrape");
-const { saveReportAsJson, saveToJson, readJson, sleep } = require('./utils');
+const { saveReportAsJson, saveToJson, readJson, sleep, getFileExtension } = require('./utils');
 const { timestamp, psc } = require("./settings");
 
 
 async function _newBrowser() {
     var browser = await puppeteer.launch({
-        // executablePath: '/Users/davidduong/nwjs-sdk-v0.51.1-osx-x64/nwjc',
+        // executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
         ignoreDefaultArgs: true,
         headless: false,
         defaultViewport: null,
@@ -26,7 +26,7 @@ async function _newBrowser() {
     });
 
     // await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36');
-    await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1');
+    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36');
 
     await page.setViewport({
         width: 375,
@@ -40,7 +40,7 @@ async function _newBrowser() {
 function _setUpQuery() {
     const api = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
     const parameters = {
-      url: encodeURIComponent(process.env.NETLIFY_URL)
+      url: encodeURIComponent(process.env.NETLIFY_URL || '')
     };
     let query = `${api}?`;
     for (key in parameters) {
@@ -56,12 +56,6 @@ async function runPagespeedApi() {
       .then(json => {
         // See https://developers.google.com/speed/docs/insights/v5/reference/pagespeedapi/runpagespeed#response
         // to learn more about each of the properties in the response object.
-
-        // const cruxMetrics = {
-        //   "First Contentful Paint": json.loadingExperience.metrics.FIRST_CONTENTFUL_PAINT_MS.category || null,
-        //   "First Input Delay": json.loadingExperience.metrics.FIRST_INPUT_DELAY_MS.category || null
-        // };
-        // console.log(cruxMetrics);
         const lighthouse = json.lighthouseResult;
         if (lighthouse) {
             const lighthouseMetrics = {
@@ -82,184 +76,307 @@ async function runPagespeedApi() {
 };
 
 async function scrapeElemsAndTest(page) {
-  const testFileName = process.env.TEST_FILE_NAME;
+    const testFileName = process.env.TEST_FILE_NAME;
 
-  // inject libraries into puppeteer browser
-  // await page.addScriptTag({ path: './node_modules/fs-extra/lib/json/jsonfile.js' });
+    // inject libraries into puppeteer browser
+    // await page.addScriptTag({ path: './node_modules/fs-extra/lib/json/jsonfile.js' });
 
-  // inject functions into puppeteer browser
-  await page.exposeFunction('saveToJson', saveToJson);
-  await page.exposeFunction('readJson', readJson);
-  await page.exposeFunction('sleep', sleep);
+    // inject functions into puppeteer browser
+    await page.exposeFunction('saveToJson', saveToJson);
+    await page.exposeFunction('readJson', readJson);
+    await page.exposeFunction('sleep', sleep);
 
-  await page.exposeFunction('downloadAndReplacePage', (async () => {
+    await page.exposeFunction('downloadAndReplacePage', (async () => {
     console.log('downloading page...');
     const htmlContent = await page.content();
     fs.writeFileSync('./baseScrapeData/index.html', htmlContent, (error) => {console.log(error)});
     return true;
-  }));
+    }));
 
-  await page.exposeFunction('takeScreenshot', (async (testNum) => {
+    await page.exposeFunction('takeScreenshot', (async (testNum) => {
     return await page.screenshot({
-      path: `./evaluations/${timestamp}-test-ss-${testNum}.png`,
-      fullPage: true,
+        path: `./evaluations/${timestamp}-test-ss-${testNum}.png`,
+        fullPage: true,
     });
-  }));
+    }));
 
-  await page.exposeFunction('gitPushData', (async () => {
-      console.log('git pushing latest HTML changes...');
-      scrape.gitPushScrapeData();
-  }));
-  
-  const data = await page.evaluate(async (psc, testFileName) => {
-      let testElems = [];
-      let allHtml = document.querySelectorAll(['div', 'img']);
-      console.log(allHtml.length);
+    await page.exposeFunction('gitPushData', (async () => {
+        console.log('git pushing latest HTML changes...');
+        scrape.gitPushScrapeData();
+    }));
 
-      // find largest height elem
-      for (let i = 0; i < allHtml.length; i++) {
-          const elem = allHtml[i];
-          const height = elem.height;
-          const width = elem.width;
+    await page.exposeFunction('getFileExtension', (fileStr) => {
+        return getFileExtension(fileStr);
+    });
 
-          const minChildElems = 3;
-          const elemData = {
-              action: '',
-              element: null,
-          }
-          
-          // element filtering
-          if (elem.children.length >= minChildElems) {
-              // check if children have multiple imgs
-              let elemCount = 0;
-              Array.from(elem.children).forEach((child) => {
-                  // return elem when met the min num of children
-                  if (elemCount >= minChildElems) {
-                      elemData.action = 'remove';
-                      elemData.element = elem;
-                      testElems.push(elemData);
-                      return;
-                  }
-                  if (child.tagName === 'IMG' && child.src) {
-                      elemCount += 1;
-                  };
-              });
-          } else if (elem.tagName === 'DIV' && elem.innerText) {
-              const wordCount = elem.innerText.length;
-              if (height >= psc.minElemHeight && 
-                  width >= psc.minElemWidth && 
-                  wordCount >= psc.minWordCount
-              ) {
-                  elemData.action = 'test';
-                  elemData.element = elem;
-                  testElems.push(elemData);
-              };
-          } else if (elem.tagName === 'IMG' && elem.src) {
-              if (height >= psc.minImgHeight && 
-                  width >= psc.minImgWidth
-              ) {
-                  elemData.action = 'remove';
-                  elemData.element = elem;
-                  testElems.push(elemData);
-              };
-          };
+    await page.evaluate(async (psc, testFileName) => {
+    let testElems = [];
+    // let allHtml = document.querySelectorAll([
+    //     'link', 'script',
+    //     'div', 'iframe',
+    //     'img', 'video',
+    //     'nav', 'footer',
+    // ]);
+    let allHtml = document.getElementsByTagName('*');
+    let totalFilteredElem = 0;
 
-      };
+    console.log(`Total elements: ${allHtml.length}`);
+    let linkCt = 0;
+    let scriptCt = 0;
+    let divCt = 0;
+    let textCt = 0;
+    let iframeCt = 0;
+    let imgCt = 0;
+    let videoCt = 0;
+    let navCt = 0;
+    let footerCt = 0;
 
-        for (let i = 0; i < testElems.length; i++) {
-            const testElem = testElems[i];
-            console.log(`currently testing: ${testElem.element.tagName}`);
+    // find largest height elem
+    for (let i = 0; i < allHtml.length; i++) {
+        const elem = allHtml[i];
+        const height = elem.height;
+        const width = elem.width;
 
-            let currentTestData = await readJson(testFileName);
-
-            const element = testElem.element;
-            const parent = testElem.element.parentElement;
-
-            // mark element for SS
-            const oldStyle = element.style.border;
-            element.style.border = '3px solid red';
-
-            // screenshot the modified page for current test
-            await window.takeScreenshot(currentTestData.elementNum);
-
-            // revert styles
-            element.style.border = oldStyle;
-
-            // modify html
-            element.parentNode.removeChild(element);
-
-            // download modified html
-            await window.downloadAndReplacePage();
-
-            // update webhost files
-            await window.gitPushData();
-            
-            // wait for web hook / testing to complete
-            while (!currentTestData.completed) {
-                currentTestData = await readJson(testFileName);
-                
-                await sleep(2500);
-                currentTestData = await readJson(testFileName);
-                console.log('Waiting... test completed: ' + currentTestData.completed);
-                await sleep(2500);
-            };
-
-            // add element back
-            parent.appendChild(element);
-
-            // update test data file
-            saveToJson({
-                elementNum: i + 1,
-                completed: false,
-            }, testFileName);
+        const elemData = {
+            action: '',
+            element: null,
         }
 
+        // console.log(elem.tagName);
+
+        // element filtering
+        // if (elem.children.length >= minChildElems) {
+        //     // check if children have multiple imgs
+        //     let elemCount = 0;
+        //     Array.from(elem.children).forEach((child) => {
+        //         // return elem when met the min num of children
+        //         if (elemCount >= minChildElems) {
+        //             elemData.action = 'remove';
+        //             elemData.element = elem;
+        //             testElems.push(elemData);
+        //             return;
+        //         }
+        //         if (child.tagName === 'IMG' && child.src) {
+        //             elemCount += 1;
+        //         };
+        //     });
+        // } else 
+        if (elem.innerText) {
+            const wordCount = elem.innerText.length;
+            console.log('word ct: ', wordCount);
+            console.log(height);
+            console.log(width);
+            if (height >= psc.text.minElemHeight && 
+                width >= psc.text.minElemWidth && 
+                wordCount >= psc.text.minWordCount
+            ) {
+                elemData.action = 'test';
+                elemData.element = elem;
+                testElems.push(elemData);
+
+                textCt += 1;
+                totalFilteredElem += 1;
+            };
+        } else if (elem.tagName === 'IMG' && elem.src) {
+            if (height >= psc.image.minImgHeight && 
+                width >= psc.image.minImgWidth
+            ) {
+                elemData.action = 'remove';
+                elemData.element = elem;
+                testElems.push(elemData);
+
+                imgCt += 1;
+                totalFilteredElem += 1;
+            };
+        } else if (elem.tagName === 'SCRIPT' && elem.src) {
+            // ignore type="application/json"
+            if (elem.type === 'application/json') {
+                continue;
+            };
+            
+            // Grab all src with suffix .js
+            const fileType = await window.getFileExtension(elem.src);
+            if (fileType === 'js') {
+                elemData.action = 'remove';
+                elemData.element = elem;
+                testElems.push(elemData);
+
+                scriptCt += 1;
+                totalFilteredElem += 1;
+            }
+            // NOTE innerText contents... need to catch 'require' and 'requirejs' (dont worry about it now)
+        } else if (elem.tagName === 'NAV') {
+            if (elem.children.length >= psc.nav.minChildren) {
+                elemData.action = 'remove';
+                elemData.element = elem;
+                testElems.push(elemData);
+
+                navCt += 1;
+                totalFilteredElem += 1;
+            }
+        } else if (elem.tagName === 'FOOTER') {
+            if (elem.children.length >= psc.footer.minChildren) {
+                elemData.action = 'remove';
+                elemData.element = elem;
+                testElems.push(elemData);
+
+                footerCt += 1;
+                totalFilteredElem += 1;
+            }
+        } else if (elem.tagName === 'IFRAME' && elem.src) {
+            elemData.action = 'remove';
+            elemData.element = elem;
+            testElems.push(elemData);
+
+            iframeCt += 1;
+            totalFilteredElem += 1;
+        } else if (elem.tagName === 'VIDEO') {
+            if (elem.src) {
+                elemData.action = 'remove';
+                elemData.element = elem;
+                testElems.push(elemData);
+
+                videoCt += 1;
+                totalFilteredElem += 1;
+                continue;
+            }
+
+            // check if video's children are sources
+            Array.from(elem.children).every((child) => {
+                if (child.tagName === 'SOURCE') {
+                    elemData.action = 'remove';
+                    elemData.element = elem;
+                    testElems.push(elemData);
+
+                    videoCt += 1;
+                    totalFilteredElem += 1;
+                    return false;
+                }
+            });
+        } else if (elem.tagName === 'LINK' && elem.href) {
+            // find .css files and rel="dns-prefetch" | "preconnect" | "preload"
+            // NOTE: Does not count link inside iframes
+            const fileType = await window.getFileExtension(elem.href);
+            const relType = elem.rel || '';
+
+            if (
+                psc.link.files.includes(fileType) || psc.link.rel.includes(relType)
+                ) {
+                    elemData.action = 'remove';
+                    elemData.element = elem;
+                    testElems.push(elemData);
+
+                    linkCt += 1;
+                    totalFilteredElem += 1;
+            }
+        }
+    };
+
+    console.log(`Link count: ${linkCt}`);
+    console.log(`Script count: ${scriptCt}`);
+    console.log(`Div count: ${divCt}`);
+    console.log(`Text count: ${textCt}`);
+    console.log(`iFrame count: ${iframeCt}`);
+    console.log(`Img count ${imgCt}`);
+    console.log(`Video count ${videoCt}`);
+    console.log(`Nav count ${navCt}`);
+    console.log(`Footer count ${footerCt}`);
+    console.log(`Final total filtered elements: ${totalFilteredElem}`);
+    
+        // for (let i = 0; i < testElems.length; i++) {
+        //     const testElem = testElems[i];
+        //     console.log(`currently testing: ${testElem.element.tagName}`);
+
+        //     let currentTestData = await readJson(testFileName);
+
+        //     const element = testElem.element;
+        //     const parent = testElem.element.parentElement;
+
+        //     // mark element for SS
+        //     const oldStyle = element.style.border;
+        //     element.style.border = '3px solid red';
+
+        //     // screenshot the modified page for current test
+        //     await window.takeScreenshot(currentTestData.elementNum);
+
+        //     // revert styles
+        //     element.style.border = oldStyle;
+
+        //     // modify html
+        //     element.parentNode.removeChild(element);
+
+        //     // download modified html
+        //     await window.downloadAndReplacePage();
+
+        //     // update webhost files
+        //     await window.gitPushData();
+            
+        //     // wait for web hook / testing to complete
+        //     while (!currentTestData.completed) {
+        //         currentTestData = await readJson(testFileName);
+                
+        //         await sleep(2500);
+        //         currentTestData = await readJson(testFileName);
+        //         console.log('Waiting... test completed: ' + currentTestData.completed);
+        //         await sleep(2500);
+        //     };
+
+        //     // add element back
+        //     parent.appendChild(element);
+
+        //     // update test data file
+        //     saveToJson({
+        //         elementNum: i + 1,
+        //         completed: false,
+        //     }, testFileName);
+        // }
+
         return testElems;
-  }, psc, testFileName);
+}, psc, testFileName);
   
   return true;
 };
 
-async function pagespeedEvaluation() {
+async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
     const testFileName = process.env.TEST_FILE_NAME;
     console.log('Evaluating pagespeed....');
 
     // init scrape and download page
-    await scrape.scrapeAndDownloadPage();
+    // await scrape.scrapeAndDownloadPage();
 
-    // init git push page
-    scrape.gitPushScrapeData();
+    // // init git push page
+    // scrape.gitPushScrapeData();
     
-    // create init test data file
-    const testData = {
-        elementNum: -1,
-        completed: false,
-    };
-    saveToJson(testData, testFileName);
+    // // create init test data file
+    // const testData = {
+    //     elementNum: -1,
+    //     completed: false,
+    // };
+    // saveToJson(testData, testFileName);
 
-    // baseline report
-    const results = await runPagespeedApi();
-    saveReportAsJson('lh-report-initial', results, timestamp);
+    // // baseline report
+    // const results = await runPagespeedApi();
+    // saveReportAsJson('lh-report-initial', results, timestamp);
 
-    let currentTestData = await readJson(testFileName);
+    // let currentTestData = await readJson(testFileName);
 
-    while (currentTestData.elementNum === -1) {
-        currentTestData = await readJson(testFileName);
-        await sleep(2000);
-        console.log('Waiting for initial git push to complete...');
-    }
+    // while (currentTestData.elementNum === -1) {
+    //     currentTestData = await readJson(testFileName);
+    //     await sleep(2000);
+    //     console.log('Waiting for initial git push to complete...');
+    // }
 
     // init browser
     const { browser, page } = await _newBrowser();
     
-    await page.goto(process.env.NETLIFY_URL);
+    await page.goto(url);
     await page.waitForSelector('body');
 
     // take init screenshot
-    await page.screenshot({
-      path: `./evaluations/${timestamp}-baseScreenshot.png`,
-      fullPage: true,
-    });
+    // await page.screenshot({
+    //   path: `./evaluations/${timestamp}-baseScreenshot.png`,
+    //   fullPage: true,
+    // });
 
     // scrape elements and initialize testing
     const baseElems = await scrapeElemsAndTest(page);
