@@ -18,7 +18,9 @@ async function _newBrowser() {
     });
 
     var page = await browser.newPage();
-    page.on('console', consoleObj => console.log(consoleObj.text())); // console.log work inside page methods
+
+    // console.log work inside page methods
+    page.on('console', consoleObj => console.log(consoleObj.text()));
 
     // browser settings
     await page.setExtraHTTPHeaders({
@@ -69,7 +71,7 @@ async function runPagespeedApi() {
             return lighthouseMetrics;
         };
         return {
-            'Error': 'Pagepeed API failed to retrieve report'
+            'Error': 'PageSpeed API failed to retrieve report'
         };
       });
       return results;
@@ -77,9 +79,6 @@ async function runPagespeedApi() {
 
 async function scrapeElemsAndTest(page) {
     const testFileName = process.env.TEST_FILE_NAME;
-
-    // inject libraries into puppeteer browser
-    // await page.addScriptTag({ path: './node_modules/fs-extra/lib/json/jsonfile.js' });
 
     // inject functions into puppeteer browser
     await page.exposeFunction('saveToJson', saveToJson);
@@ -129,6 +128,7 @@ async function scrapeElemsAndTest(page) {
     let imgCt = 0;
     let videoCt = 0;
     let navCt = 0;
+    let ulCt = 0;
     let footerCt = 0;
 
     // find largest height elem
@@ -136,13 +136,14 @@ async function scrapeElemsAndTest(page) {
         const elem = allHtml[i];
         const height = elem.height;
         const width = elem.width;
+        const topElementText = elem?.firstChild?.nodeValue?.replace(/\s+/g, '') || '';
+        const elemLimit = 2;
 
         const elemData = {
             action: '',
+            type: '',
             element: null,
         }
-
-        // console.log(elem.tagName);
 
         // element filtering
         // if (elem.children.length >= minChildElems) {
@@ -161,34 +162,27 @@ async function scrapeElemsAndTest(page) {
         //         };
         //     });
         // } else 
-        if (elem.innerText) {
-            const wordCount = elem.innerText.length;
-            console.log('word ct: ', wordCount);
-            console.log(height);
-            console.log(width);
-            if (height >= psc.text.minElemHeight && 
-                width >= psc.text.minElemWidth && 
-                wordCount >= psc.text.minWordCount
-            ) {
-                elemData.action = 'test';
-                elemData.element = elem;
-                testElems.push(elemData);
+        if (topElementText && topElementText.length >= psc.text.minWordCount && textCt < elemLimit) {
+            elemData.action = 'test';
+            elemData.element = elem;
+            elemData.type = elem.tagName;
+            testElems.push(elemData);
 
-                textCt += 1;
-                totalFilteredElem += 1;
-            };
-        } else if (elem.tagName === 'IMG' && elem.src) {
+            textCt += 1;
+            totalFilteredElem += 1;
+        } else if (elem.tagName === 'IMG' && elem.src && imgCt < elemLimit) {
             if (height >= psc.image.minImgHeight && 
                 width >= psc.image.minImgWidth
             ) {
                 elemData.action = 'remove';
                 elemData.element = elem;
+                elemData.type = elem.tagName;
                 testElems.push(elemData);
 
                 imgCt += 1;
                 totalFilteredElem += 1;
             };
-        } else if (elem.tagName === 'SCRIPT' && elem.src) {
+        } else if (elem.tagName === 'SCRIPT' && elem.src && scriptCt < elemLimit) {
             // ignore type="application/json"
             if (elem.type === 'application/json') {
                 continue;
@@ -197,43 +191,67 @@ async function scrapeElemsAndTest(page) {
             // Grab all src with suffix .js
             const fileType = await window.getFileExtension(elem.src);
             if (fileType === 'js') {
+                console.log(elem.src);
                 elemData.action = 'remove';
                 elemData.element = elem;
+                elemData.type = elem.tagName;
                 testElems.push(elemData);
 
                 scriptCt += 1;
                 totalFilteredElem += 1;
             }
+            // grab all url JS injections
+
             // NOTE innerText contents... need to catch 'require' and 'requirejs' (dont worry about it now)
-        } else if (elem.tagName === 'NAV') {
+        } else if (elem.tagName === 'NAV' && navCt < elemLimit) {
             if (elem.children.length >= psc.nav.minChildren) {
                 elemData.action = 'remove';
                 elemData.element = elem;
+                elemData.type = elem.tagName;
                 testElems.push(elemData);
 
                 navCt += 1;
                 totalFilteredElem += 1;
             }
-        } else if (elem.tagName === 'FOOTER') {
+        } else if (elem.tagName === 'UL' && ulCt < elemLimit) {
+            const acceptedClassNames = psc.ul.classes;
+            if (elem.classList) {
+                const hasReqClassName = Array.from(elem.classList).some((className) => {
+                    return acceptedClassNames.includes(className);
+                });
+                if (hasReqClassName) {
+                    elemData.action = 'remove';
+                    elemData.element = elem;
+                    elemData.type = elem.tagName;
+                    testElems.push(elemData);
+
+                    ulCt += 1;
+                    totalFilteredElem += 1;
+                };
+            }
+        } else if (elem.tagName === 'FOOTER' && footerCt < elemLimit) {
             if (elem.children.length >= psc.footer.minChildren) {
                 elemData.action = 'remove';
                 elemData.element = elem;
+                elemData.type = elem.tagName;
                 testElems.push(elemData);
 
                 footerCt += 1;
                 totalFilteredElem += 1;
             }
-        } else if (elem.tagName === 'IFRAME' && elem.src) {
+        } else if (elem.tagName === 'IFRAME' && elem.src && iframeCt < elemLimit) {
             elemData.action = 'remove';
             elemData.element = elem;
+            elemData.type = elem.tagName;
             testElems.push(elemData);
 
             iframeCt += 1;
             totalFilteredElem += 1;
-        } else if (elem.tagName === 'VIDEO') {
+        } else if (elem.tagName === 'VIDEO' && videoCt < elemLimit) {
             if (elem.src) {
                 elemData.action = 'remove';
                 elemData.element = elem;
+                elemData.type = elem.tagName;
                 testElems.push(elemData);
 
                 videoCt += 1;
@@ -246,6 +264,7 @@ async function scrapeElemsAndTest(page) {
                 if (child.tagName === 'SOURCE') {
                     elemData.action = 'remove';
                     elemData.element = elem;
+                    elemData.type = elem.tagName;
                     testElems.push(elemData);
 
                     videoCt += 1;
@@ -253,7 +272,7 @@ async function scrapeElemsAndTest(page) {
                     return false;
                 }
             });
-        } else if (elem.tagName === 'LINK' && elem.href) {
+        } else if (elem.tagName === 'LINK' && elem.href && linkCt < elemLimit) {
             // find .css files and rel="dns-prefetch" | "preconnect" | "preload"
             // NOTE: Does not count link inside iframes
             const fileType = await window.getFileExtension(elem.href);
@@ -264,6 +283,7 @@ async function scrapeElemsAndTest(page) {
                 ) {
                     elemData.action = 'remove';
                     elemData.element = elem;
+                    elemData.type = elem.tagName;
                     testElems.push(elemData);
 
                     linkCt += 1;
@@ -280,58 +300,76 @@ async function scrapeElemsAndTest(page) {
     console.log(`Img count ${imgCt}`);
     console.log(`Video count ${videoCt}`);
     console.log(`Nav count ${navCt}`);
+    console.log(`UL count ${ulCt}`);
     console.log(`Footer count ${footerCt}`);
     console.log(`Final total filtered elements: ${totalFilteredElem}`);
     
-        // for (let i = 0; i < testElems.length; i++) {
-        //     const testElem = testElems[i];
-        //     console.log(`currently testing: ${testElem.element.tagName}`);
+    for (let i = 0; i < testElems.length; i++) {
+        const testElem = testElems[i];
+        console.log(
+            `currently testing: ${testElem.element.tagName} - 
+            src: ${testElem.element?.src || 'N/A'} - 
+            href: ${testElem.element?.href || 'N/A'}`
+        );
 
-        //     let currentTestData = await readJson(testFileName);
+        let currentTestData = await readJson(testFileName);
+        
+        if (testElem.src) {
+            currentTestData.elementSrc = testElem.src;
+        };
 
-        //     const element = testElem.element;
-        //     const parent = testElem.element.parentElement;
+        const element = testElem.element;
+        const parent = testElem.element.parentElement;
 
-        //     // mark element for SS
-        //     const oldStyle = element.style.border;
-        //     element.style.border = '3px solid red';
+        // mark element for SS
+        const oldStyle = element.style.border;
+        element.style.border = '3px solid red';
 
-        //     // screenshot the modified page for current test
-        //     await window.takeScreenshot(currentTestData.elementNum);
+        // screenshot the modified page for current test
+        await window.takeScreenshot(currentTestData.elementNum);
 
-        //     // revert styles
-        //     element.style.border = oldStyle;
+        // revert styles
+        element.style.border = oldStyle;
 
-        //     // modify html
-        //     element.parentNode.removeChild(element);
+        // modify html
+        element.parentNode.removeChild(element);
 
-        //     // download modified html
-        //     await window.downloadAndReplacePage();
+        // download modified html
+        await window.downloadAndReplacePage();
 
-        //     // update webhost files
-        //     await window.gitPushData();
+        // update webhost files
+        await window.gitPushData();
+        
+        // wait for web hook / testing to complete
+        while (!currentTestData.elementCompleted) {
+            currentTestData = await readJson(testFileName);
             
-        //     // wait for web hook / testing to complete
-        //     while (!currentTestData.completed) {
-        //         currentTestData = await readJson(testFileName);
-                
-        //         await sleep(2500);
-        //         currentTestData = await readJson(testFileName);
-        //         console.log('Waiting... test completed: ' + currentTestData.completed);
-        //         await sleep(2500);
-        //     };
+            await sleep(2500);
+            currentTestData = await readJson(testFileName);
+            console.log(`Waiting for ${currentTestData.elementType}... test completed: ${currentTestData.elementCompleted}`);
+            await sleep(2500);
+        };
 
-        //     // add element back
-        //     parent.appendChild(element);
+        // add element back
+        parent.appendChild(element);
 
-        //     // update test data file
-        //     saveToJson({
-        //         elementNum: i + 1,
-        //         completed: false,
-        //     }, testFileName);
-        // }
+        // update test data file
+        saveToJson({
+            elementNum: i + 1,
+            elementType: currentTestData.elementType,
+            elementSrc: currentTestData.elementSrc,
+            elementCompleted: false,
+            analysisCompleted: i === (testElems.length - 1),
+            startTime: currentTestData.startTime,
+            endTime: currentTestData.endTime,
+        }, testFileName);
 
-        return testElems;
+        if (i === (testElems.length - 1)) {
+            console.log('PageSpeed testing completed!');
+        };
+    };
+
+    return testElems;
 }, psc, testFileName);
   
   return true;
@@ -340,31 +378,30 @@ async function scrapeElemsAndTest(page) {
 async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
     const testFileName = process.env.TEST_FILE_NAME;
     console.log('Evaluating pagespeed....');
-
-    // init scrape and download page
-    // await scrape.scrapeAndDownloadPage();
-
-    // // init git push page
-    // scrape.gitPushScrapeData();
     
-    // // create init test data file
-    // const testData = {
-    //     elementNum: -1,
-    //     completed: false,
-    // };
-    // saveToJson(testData, testFileName);
+    // create init test data file
+    const testData = {
+        elementNum: -1,
+        elementType: '',
+        elementSrc: '',
+        elementCompleted: false,
+        analysisCompleted: false,
+        startTime: new Date().toTimeString(),
+        endTime: '',
+    };
+    saveToJson(testData, testFileName);
 
-    // // baseline report
-    // const results = await runPagespeedApi();
-    // saveReportAsJson('lh-report-initial', results, timestamp);
+    // baseline report
+    const results = await runPagespeedApi();
+    saveReportAsJson('lh-report-initial', results, timestamp);
 
-    // let currentTestData = await readJson(testFileName);
+    let currentTestData = await readJson(testFileName);
 
-    // while (currentTestData.elementNum === -1) {
-    //     currentTestData = await readJson(testFileName);
-    //     await sleep(2000);
-    //     console.log('Waiting for initial git push to complete...');
-    // }
+    while (currentTestData.elementNum === -1) {
+        currentTestData = await readJson(testFileName);
+        await sleep(2000);
+        console.log('Waiting for initial git push to complete...');
+    }
 
     // init browser
     const { browser, page } = await _newBrowser();
@@ -373,10 +410,10 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
     await page.waitForSelector('body');
 
     // take init screenshot
-    // await page.screenshot({
-    //   path: `./evaluations/${timestamp}-baseScreenshot.png`,
-    //   fullPage: true,
-    // });
+    await page.screenshot({
+      path: `./evaluations/${timestamp}-baseScreenshot.png`,
+      fullPage: true,
+    });
 
     // scrape elements and initialize testing
     const baseElems = await scrapeElemsAndTest(page);

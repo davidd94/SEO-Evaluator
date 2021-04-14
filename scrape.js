@@ -5,21 +5,19 @@ const fs = require("fs-extra");
 
 const git = require("./git");
 
+const projectDir = path.dirname(require.main.filename);
 
-async function scrapeAndDownloadPage(url='', filePath=null) {
-    const scrapeDir = path.resolve(__dirname, filePath || 'baseScrapeData');
+async function scrapeAndDownloadPage(url=null, filePath=null) {
+    const scrapeDir = projectDir + ('/baseScrapeData' || filePath);
 
-    // check if scrape dir exists to rm
-    fs.access(filePath || "./baseScrapeData", function(error) {
-        if (!error) {
-            fs.rmdirSync(scrapeDir, { recursive: true }, (err) => {
-                if (err) {
-                    throw err;
-                };
-                console.log('Successfully removed old scraped data!');
-            });
-        };
-    });
+    // remove old scrape files, dir persist and created if doesn't exist
+    try {
+        // await fs.emptyDir(scrapeDir);
+        await fs.rmdir(scrapeDir, { recursive: true });
+        console.log('Removed old scrape files');
+    } catch (err) {
+        console.log(err);
+    };
 
     await scrape({
         // Provide the URL(s) of the website(s) that you want to clone
@@ -36,10 +34,6 @@ async function scrapeAndDownloadPage(url='', filePath=null) {
                     // executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
                     headless: false,
                     defaultViewport: null,
-                    arguments: [
-                        // '--single-process',
-                        // '--no-sandbox',
-                    ],
                 },
                 // scrollToBottom: {
                 //     timeout: 30000,
@@ -56,7 +50,7 @@ async function scrapeAndDownloadPage(url='', filePath=null) {
         ignoreErrors: true,
         requestConcurrency: 3, // need to limit this or else scrape hangs due to network being blocked
     }, (error) => {
-        console.log(error);
+        if (error) console.log(error);
     });
 
     console.log('Successfully scraped the website!');
@@ -64,50 +58,46 @@ async function scrapeAndDownloadPage(url='', filePath=null) {
     return true;
 };
 
-function gitPushScrapeData(folderPath = './baseScrapeData') {
-    // delete old repo files
-    
-    // remove old test repo files
-    fs.rmdirSync("../seo-testing", { recursive: true }, (err) => {
-        if (err) {
-            throw err;
-        };
-        console.log('Successfully removed old scraped data!');
-    });
+async function gitPushScrapeData(folderPath = '/baseScrapeData') {
+    const scrapeDir = projectDir + folderPath;
+    const gitDir = projectDir + '/../seo-testing';
+    const tmpDir = projectDir + '/tmp/.git';
 
-    // create folder again
-    // fs.mkdir("../seo-testing", (err) => {
-    //     if (err) {
-    //         throw err;
-    //     }
-    // });
+    // remove old repo files, dir persist
+    try {
+        await fs.emptyDir(gitDir);
+        console.log('Removed old repo files');
+    } catch (err) {
+        console.log(err);
+    };
 
-    // copy over new repo files
-    fs.copy(folderPath, "../seo-testing", function(err) {
-        if (err) {
-            throw err;
-        };
-        console.log('Copied files over to repo.');
+    // copy new files over to repo
+    try {
+        await fs.copy(scrapeDir, gitDir);
+        console.log('Copied new files over to repo');
+    } catch (err) {
+        console.log(err);
+    };
 
-        // copy over .git folder
-        fs.copy("./tmp/.git", "../seo-testing/.git", function(err) {
-            if (err) {
-                throw err;
-            };
-            console.log('Copied .git folder to test repo');
+    // copy over .git folder
+    try {
+        await fs.copy(tmpDir, gitDir + '/.git');
+        console.log('Copied tmp .git folder to repo');
+    } catch (err) {
+        console.log(err);
+    };
 
-            // run script to auto push new files to git
-            git.gitPush();
-        
-            // copy over new .git folder
-            fs.copy("../seo-testing/.git", "./tmp/.git", function(err) {
-                if (err) {
-                    throw err;
-                };
-                console.log('Updated .git folder');
-            });
-        });
-    });
+    // run script to auto push new files to git
+    await git.gitPush();
+    console.log('Pushing new files to git...');
+
+    // copy over new .git folder
+    try {
+        await fs.copy(gitDir + '/.git', tmpDir);
+        console.log('Updated .git folder to tmp');
+    } catch (err) {
+        console.log(err);
+    };
 
     return true;
 }

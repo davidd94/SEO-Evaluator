@@ -3,3 +3,4 @@ baseScrapeData
 tmpScrapeData
 evaluations
 .env
+*.xlsx

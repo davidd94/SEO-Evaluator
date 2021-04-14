@@ -64,7 +64,7 @@ async function getFileExtension(fileStr) {
     let file = fileStr.split('/').pop();
     const ext = file.substr(file.lastIndexOf('.') + 1, file.length);
     return ext || '';
-}
+};
 
 exports.saveReportAsJson = saveReportAsJson;
 exports.saveToJson = saveToJson;

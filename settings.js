@@ -21,8 +21,8 @@ const pagespeedCriteria = {
         }
     },
     text: {
-        minElemHeight: 300,
-        minElemWidth: 0,
+        // minElemHeight: 300,
+        // minElemWidth: 0,
         minWordCount: 300,
     },
     video: {
@@ -43,6 +43,10 @@ const pagespeedCriteria = {
         ],
     },
     nav: {
+        minChildren: 3,
+    },
+    ul: {
+        classes: ['nav'],
         minChildren: 3,
     },
     footer: {
