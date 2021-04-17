@@ -2,17 +2,15 @@ const scrape = require("website-scraper");
 const PuppeteerPlugin = require("website-scraper-puppeteer");
 const path = require("path");
 const fs = require("fs-extra");
-
-const git = require("./git");
+const { exec } = require('child_process');
 
 const projectDir = path.dirname(require.main.filename);
 
-async function scrapeAndDownloadPage(url=null, filePath=null) {
-    const scrapeDir = projectDir + ('/baseScrapeData' || filePath);
+async function scrapeAndDownloadPage(url=null) {
+    const scrapeDir = `${projectDir}/baseScrapeData`;
 
     // remove old scrape files, dir persist and created if doesn't exist
     try {
-        // await fs.emptyDir(scrapeDir);
         await fs.rmdir(scrapeDir, { recursive: true });
         console.log('Removed old scrape files');
     } catch (err) {
@@ -55,18 +53,39 @@ async function scrapeAndDownloadPage(url=null, filePath=null) {
 
     console.log('Successfully scraped the website!');
 
+    fs.ensureDir(projectDir + '/baseScrapeData1', err => {
+        if (err) {
+            throw err;
+        }
+        fs.copy(scrapeDir, './baseScrapeData1');
+    });
+    console.log('Copied files to Chunk 1');
+    fs.ensureDir(projectDir + '/baseScrapeData2', err => {
+        if (err) {
+            throw err;
+        }
+        fs.copy(scrapeDir, './baseScrapeData2');
+    });
+    console.log('Copied files to Chunk 2');
+    fs.ensureDir(projectDir + '/baseScrapeData3', err => {
+        if (err) {
+            throw err;
+        }
+        fs.copy(scrapeDir, './baseScrapeData3');
+    });
+    console.log('Copied files to Chunk 3');
+
     return true;
 };
 
-async function gitPushScrapeData(repoID, folderPath = '/baseScrapeData') {
-    const scrapeDir = projectDir + folderPath;
+async function gitPushScrapeData(repoID) {
+    const scrapeDir = `${projectDir}/baseScrapeData${repoID}`;
     const gitDir = projectDir + `/../seo-testing${repoID}`;
-    const tmpDir = projectDir + '/tmp/.git';
 
     // remove old repo files, dir persist
     try {
         await fs.emptyDir(gitDir);
-        console.log('Removed old repo files');
+        console.log(`Removed old repo files for repo ID: ${repoID}`);
     } catch (err) {
         console.log(err);
     };
@@ -74,30 +93,24 @@ async function gitPushScrapeData(repoID, folderPath = '/baseScrapeData') {
     // copy new files over to repo
     try {
         await fs.copy(scrapeDir, gitDir);
-        console.log('Copied new files over to repo');
-    } catch (err) {
-        console.log(err);
-    };
-
-    // copy over .git folder
-    try {
-        await fs.copy(tmpDir, gitDir + '/.git');
-        console.log('Copied tmp .git folder to repo');
+        console.log(`Copied new files over to repo ID: ${repoID}`);
     } catch (err) {
         console.log(err);
     };
 
     // run script to auto push new files to git
-    await git.gitPush(repoID);
     console.log('Pushing new files to git...');
-
-    // copy over new .git folder
-    try {
-        await fs.copy(gitDir + '/.git', tmpDir);
-        console.log('Updated .git folder to tmp');
-    } catch (err) {
-        console.log(err);
-    };
+    await exec(`sh git-push.sh -a${repoID}`, (err, stdout, stderr) => {
+        if (err) {
+            console.log(`error: ${err.message}`);
+            return;
+        }
+        if (stderr) {
+            console.log(`stderr: ${stderr}`);
+            return;
+        }
+        console.log(`stdout: ${stdout}`);
+    });
 
     return true;
 }

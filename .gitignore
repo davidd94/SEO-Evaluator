@@ -1,6 +1,9 @@
 node_modules
 baseScrapeData
-tmpScrapeData
+baseScrapeData1
+baseScrapeData2
+baseScrapeData3
 evaluations
+tmp
 .env
 *.xlsx

@@ -12,8 +12,11 @@ const { saveToJson, readJson, saveReportAsJson, sleep } = require('./utils');
 dotenv.config();
 
 async function initPagespeedEval() {
-    const scrapeResults = await scraper.scrapeAndDownloadPage().then(() => {
-        return scraper.gitPushScrapeData();
+    const scrapeResults = await scraper.scrapeAndDownloadPage().then(async () => {
+        const result1 = await scraper.gitPushScrapeData(1);
+        const result2 = await scraper.gitPushScrapeData(2);
+        const result3 = await scraper.gitPushScrapeData(3);
+        return result1 && result2 && result3;
     });
 
     if (scrapeResults) {
@@ -49,8 +52,25 @@ initPagespeedEval().then(async (succeeded) => {
             if (req.body['state'] === 'ready') {
                 const testFileName = process.env.TEST_FILE_NAME;
                 const maxTestNum = process.env.NUM_OF_PAGESPEED_TESTS;
-                let currentTestData = await readJson(testFileName);
-                console.log(`Current test elem (ID: ${currentTestData.elementNum}): ${currentTestData.elementType}`);
+
+                const hookSiteID = req.body['site_id'];
+                const siteID1 = process.env.NETLIFY_SITE_1_ID;
+                const siteID2 = process.env.NETLIFY_SITE_2_ID;
+                const siteID3 = process.env.NETLIFY_SITE_3_ID;
+                let chunkNum = 0;
+
+                if (hookSiteID === siteID1) {
+                    chunkNum = 1;
+                } else if (hookSiteID === siteID2) {
+                    chunkNum = 2;
+                } else if (hookSiteID === siteID3) {
+                    chunkNum = 3;
+                }
+
+                let currentTestData = await readJson(`${testFileName}${chunkNum}`);
+
+                console.log(`Currently running - Site ID (${siteID}) - Test Elem ID (${currentTestData.elementNum}) - Elem Type (${currentTestData.elementType})`);
+
                 if (currentTestData.elementNum >= 0) {
                     let currentTestNum = 1;
 
@@ -92,7 +112,7 @@ initPagespeedEval().then(async (succeeded) => {
                         await sleep(3000);
                     };
 
-                    console.log(`Test completed for (ID: ${currentTestData.elementNum}): ${currentTestData.elementType}!`);
+                    console.log(`Test completed - Site ID (${siteID}) - Test Elem ID (${currentTestData.elementNum}) - Elem Type (${currentTestData.elementType})`);
                     
                     if (currentTestData.analysisCompleted) {
                         currentTestData.endTime = new Date().toTimeString();

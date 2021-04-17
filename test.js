@@ -56,7 +56,9 @@ const { ExcelWorkbook } = require('./excel');
 // })();
 
 (async () => {
-    scraper.gitPushScrapeData(2);
+  await scraper.gitPushScrapeData(1);
+  await scraper.gitPushScrapeData(2);
+  await scraper.gitPushScrapeData(3);
 })();
 
 // (async () => {

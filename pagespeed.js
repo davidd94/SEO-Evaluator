@@ -312,22 +312,41 @@ async function scrapeElemsAndTest(page) {
     const testElems2 = testElems.slice(sectionLength, sectionLength * 2);
     const testElems3 = testElems.slice(sectionLength * 2);
 
+    // starting index for each chunks
+    let elemIndex1 = 0;
+    let elemIndex2 = sectionLength;
+    let elemIndex3 = sectionLength * 2;
+
     let elemCt = 0;
     while (elemCt < totalElems) {
-        const testElem = testElems[i];
+
+        // set elem for each chunks
+        const testElem1 = testElems[elemIndex1];
+        const testElem2 = testElems[elemIndex2];
+        const testElem3 = testElems[elemIndex3];
+
         console.log(
-            `currently testing: ${testElem.element.tagName} - 
+            `Currently testing: ${testElem.element.tagName} - 
             src: ${testElem.element?.src || 'N/A'} - 
             href: ${testElem.element?.href || 'N/A'}`
         );
-
-        let currentTestData = await readJson(testFileName);
         
-        if (testElem.src) {
-            currentTestData.elementSrc = testElem.src;
-        };
+        // get current status of each chunks
+        let currentTestData1 = await readJson(`${testFileName}1`);
+        let currentTestData2 = await readJson(`${testFileName}2`);
+        let currentTestData3 = await readJson(`${testFileName}3`);
+        
+        if (testElem1.src) {
+            currentTestData1.elementSrc = testElem1.src;
+        }
+        if (testElem2.src) {
+            currentTestData2.elementSrc = testElem2.src;
+        }
+        if (testElem3.src) {
+            currentTestData3.elementSrc = testElem3.src;
+        }
 
-        const element = testElem.element;
+        const element = testElem1.element;
         const parent = testElem.element.parentElement;
 
         // mark element for SS
@@ -386,11 +405,14 @@ async function scrapeElemsAndTest(page) {
 };
 
 async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
-    const testFileName = process.env.TEST_FILE_NAME;
+    const testFileName1 = `${process.env.TEST_FILE_NAME}1`;
+    const testFileName2 = `${process.env.TEST_FILE_NAME}2`;
+    const testFileName3 = `${process.env.TEST_FILE_NAME}3`;
     console.log('Evaluating pagespeed....');
     
     // create init test data file
-    const testData = {
+    const testData1 = {
+        siteID: process.env.NETLIFY_SITE_1_ID,
         elementNum: -1,
         elementType: '',
         elementSrc: '',
@@ -400,16 +422,51 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
         startTime: new Date().toTimeString(),
         endTime: '',
     };
-    saveToJson(testData, testFileName);
+    const testData2 = {
+        siteID: process.env.NETLIFY_SITE_2_ID,
+        elementNum: -1,
+        elementType: '',
+        elementSrc: '',
+        elementCompleted: false,
+        analysisCompleted: false,
+        totalElems: 0,
+        startTime: new Date().toTimeString(),
+        endTime: '',
+    };
+    const testData3 = {
+        siteID: process.env.NETLIFY_SITE_3_ID,
+        elementNum: -1,
+        elementType: '',
+        elementSrc: '',
+        elementCompleted: false,
+        analysisCompleted: false,
+        totalElems: 0,
+        startTime: new Date().toTimeString(),
+        endTime: '',
+    };
+
+    saveToJson(testData1, testFileName1);
+    saveToJson(testData2, testFileName2);
+    saveToJson(testData3, testFileName3);
 
     // baseline report
     const results = await runPagespeedApi();
-    saveReportAsJson('lh-report-initial', results, timestamp);
+    const reportNum = 3;
+    for (i=0; i < reportNum; i++) {
+        saveReportAsJson(`lh-report-initial-${i}`, results, timestamp);
+    }
 
-    let currentTestData = await readJson(testFileName);
+    let currentTestData1 = await readJson(testFileName1);
+    let currentTestData2 = await readJson(testFileName2);
+    let currentTestData3 = await readJson(testFileName3);
 
-    while (currentTestData.elementNum === -1) {
-        currentTestData = await readJson(testFileName);
+    while (currentTestData1.elementNum === -1 ||
+        currentTestData2.elementNum === -1 ||
+        currentTestData3.elementNum === -1
+    ) {
+        currentTestData1 = await readJson(testFileName1);
+        currentTestData2 = await readJson(testFileName2);
+        currentTestData3 = await readJson(testFileName3);
         await sleep(2000);
         console.log('Waiting for initial git push to complete...');
     }
