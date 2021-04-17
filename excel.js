@@ -1,9 +1,10 @@
 const ExcelJS = require('exceljs');
 
 class ExcelWorkbook {
-    constructor(fileID, creator, url='') {
+    constructor(fileID, creator, testData={}, url='') {
         this.fileID = fileID;
         this.creator = creator;
+        this.testData = testData;
         this.url = url || process.env.PAGE_URL;
 
         this.fileName = `${fileID}-pagespeed-results.xlsx`;
@@ -31,10 +32,10 @@ class ExcelWorkbook {
         // set information box
         const rowData = [
             ['Client URL: ', this.url],
-            ['Num of Test Elements: ', 'Unknown'],
-            ['Start Time: ', '3:24pm'],
-            ['End Time: ', '6:59pm'],
-            ['Test Duration: ', '3h:23m'],
+            ['Num of Test Elements: ', this.testData.totalElems || ''],
+            ['Start Time: ', this.testData.startTime || ''],
+            ['End Time: ', this.testData.endTime || ''],
+            ['Test Duration: ', 'WIP'],
             [' ', ' '],
         ]
         sheet.addRows(rowData);

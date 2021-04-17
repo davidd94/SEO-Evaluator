@@ -346,7 +346,7 @@ async function scrapeElemsAndTest(page) {
             
             await sleep(2500);
             currentTestData = await readJson(testFileName);
-            console.log(`Waiting for ${currentTestData.elementType}... test completed: ${currentTestData.elementCompleted}`);
+            console.log(`Waiting for ${testElem.tagName}... test completed: ${currentTestData.elementCompleted}`);
             await sleep(2500);
         };
 
@@ -356,10 +356,11 @@ async function scrapeElemsAndTest(page) {
         // update test data file
         saveToJson({
             elementNum: i + 1,
-            elementType: currentTestData.elementType,
+            elementType: testElem.tagName,
             elementSrc: currentTestData.elementSrc,
             elementCompleted: false,
             analysisCompleted: i === (testElems.length - 1),
+            totalElems: totalFilteredElem,
             startTime: currentTestData.startTime,
             endTime: currentTestData.endTime,
         }, testFileName);
@@ -386,6 +387,7 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
         elementSrc: '',
         elementCompleted: false,
         analysisCompleted: false,
+        totalElems: 0,
         startTime: new Date().toTimeString(),
         endTime: '',
     };

@@ -58,28 +58,31 @@ initPagespeedEval().then(async (succeeded) => {
                     const workbook = new ExcelWorkbook(
                         fileId=currentTestData.elementNum,
                         creator='DavidDee',
+                        testData=currentTestData,
                     );
                     await workbook.initWorkbook();
 
                     // init new section for elem
-                    workbook.addNewSection(currentTestData.type, currentTestData.elementSrc);
+                    workbook.addNewSection(currentTestData.elementType, currentTestData.elementSrc);
 
                     // run test X amount and record
                     while (currentTestNum <= maxTestNum) {
                         console.log(`Running PageSpeed API test: ${currentTestNum}`);
-                        const timestamp = Date.now();
         
                         // run pagespeed API
                         const results = await ps.runPagespeedApi();
-
+                        
+                        // add test col #
+                        workbook.addDataRow([currentTestNum]);
+                        
                         // add data
+                        const row = [];
                         Object.values(results).forEach((result) => {
-                            workbook.addDataRow([
-                                result.score,
-                                result.displayValue,
-                                result.numericValue,
-                            ]);
+                            row.push(result.score);
+                            row.push(result.displayValue);
+                            row.push(result.numericValue);
                         });
+                        workbook.addDataRow(row);
 
                         // save to excel
                         await workbook.saveWorkbookAsFile();
@@ -89,7 +92,7 @@ initPagespeedEval().then(async (succeeded) => {
                         await sleep(3000);
                     };
 
-                    console.log(`Test completed for (ID: ${currentTestData.elementNum}): ${currentTestData.type}!`);
+                    console.log(`Test completed for (ID: ${currentTestData.elementNum}): ${currentTestData.elementType}!`);
                     
                     if (currentTestData.analysisCompleted) {
                         currentTestData.endTime = new Date().toTimeString();
@@ -99,7 +102,8 @@ initPagespeedEval().then(async (succeeded) => {
                     };
 
                     // set completed and save test data file
-                    currentTestData.completed = true;
+                    currentTestData.elementCompleted = true;
+                    console.log(currentTestData);
                     saveToJson(currentTestData, testFileName);
                 } else if (currentTestData.elementNum === -1) {
                     currentTestData.elementNum = 0;
