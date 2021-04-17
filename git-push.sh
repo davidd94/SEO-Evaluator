@@ -2,6 +2,7 @@
 echo $repoID
 echo $pwd
 CURRENTDIR=${pwd}
+echo $CURRENTDIR
 PROJECT_PATH="/$HOME/projects/seo-testing$repoID"
 
 cd "$PROJECT_PATH"
