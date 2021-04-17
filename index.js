@@ -67,16 +67,18 @@ initPagespeedEval().then(async (succeeded) => {
                     chunkNum = 3;
                 }
 
-                let currentTestData = await readJson(`${testFileName}${chunkNum}`);
+                const testChunkFileName = `${testFileName}${chunkNum}`;
 
-                console.log(`Currently running - Site ID (${siteID}) - Test Elem ID (${currentTestData.elementNum}) - Elem Type (${currentTestData.elementType})`);
+                let currentTestData = await readJson(testChunkFileName);
 
-                if (currentTestData.elementNum >= 0) {
+                console.log(`Currently running - Site ID (${siteID}) - Test Elem ID (${currentTestData.elementIndex}) - Elem Type (${currentTestData.elementType})`);
+
+                if (currentTestData.initialized) {
                     let currentTestNum = 1;
 
                     // create excel
                     const workbook = new ExcelWorkbook(
-                        fileId=currentTestData.elementNum,
+                        fileId=currentTestData.elementIndex,
                         creator='DavidDee',
                         testData=currentTestData,
                     );
@@ -112,7 +114,7 @@ initPagespeedEval().then(async (succeeded) => {
                         await sleep(3000);
                     };
 
-                    console.log(`Test completed - Site ID (${siteID}) - Test Elem ID (${currentTestData.elementNum}) - Elem Type (${currentTestData.elementType})`);
+                    console.log(`Test completed - Site ID (${siteID}) - Test Elem ID (${currentTestData.elementIndex}) - Elem Type (${currentTestData.elementType})`);
                     
                     if (currentTestData.analysisCompleted) {
                         currentTestData.endTime = new Date().toTimeString();
@@ -123,11 +125,13 @@ initPagespeedEval().then(async (succeeded) => {
 
                     // set completed and save test data file
                     currentTestData.elementCompleted = true;
+                    currentTestData.elementIndex += 1;
+
                     console.log(currentTestData);
-                    saveToJson(currentTestData, testFileName);
-                } else if (currentTestData.elementNum === -1) {
-                    currentTestData.elementNum = 0;
-                    saveToJson(currentTestData, testFileName);
+                    saveToJson(currentTestData, testChunkFileName);
+                } else if (!currentTestData.initialized) {
+                    currentTestData.initialized = true;
+                    saveToJson(currentTestData, testChunkFileName);
                 }
             };
         })

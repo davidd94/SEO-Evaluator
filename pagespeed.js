@@ -78,6 +78,20 @@ async function runPagespeedApi() {
 };
 
 async function scrapeElemsAndTest(page) {
+    function takeTestSS(testElem) {
+        const element = testElem.element;
+
+        // mark element for SS
+        const oldStyle = element.style.border;
+        element.style.border = '3px solid red';
+
+        // screenshot the modified page for current test
+        await window.takeScreenshot(currentTestData.elementIndex);
+
+        // revert styles
+        element.style.border = oldStyle;
+    }
+
     const testFileName = process.env.TEST_FILE_NAME;
 
     // inject functions into puppeteer browser
@@ -85,10 +99,10 @@ async function scrapeElemsAndTest(page) {
     await page.exposeFunction('readJson', readJson);
     await page.exposeFunction('sleep', sleep);
 
-    await page.exposeFunction('downloadAndReplacePage', (async () => {
+    await page.exposeFunction('downloadAndReplacePage', (async (repoID) => {
     console.log('downloading page...');
     const htmlContent = await page.content();
-    fs.writeFileSync('./baseScrapeData/index.html', htmlContent, (error) => {console.log(error)});
+    fs.writeFileSync(`./baseScrapeData${repoID}/index.html`, htmlContent, (error) => {console.log(error)});
     return true;
     }));
 
@@ -99,9 +113,9 @@ async function scrapeElemsAndTest(page) {
     });
     }));
 
-    await page.exposeFunction('gitPushData', (async () => {
+    await page.exposeFunction('gitPushData', (async (repoID) => {
         console.log('git pushing latest HTML changes...');
-        scrape.gitPushScrapeData();
+        scrape.gitPushScrapeData(repoID);
     }));
 
     await page.exposeFunction('getFileExtension', (fileStr) => {
@@ -308,96 +322,168 @@ async function scrapeElemsAndTest(page) {
     const totalElems = testElems.length;
     const sectionLength = Math.floor(totalElems / 3);
 
-    const testElems1 = testElems.slice(0, sectionLength);
-    const testElems2 = testElems.slice(sectionLength, sectionLength * 2);
-    const testElems3 = testElems.slice(sectionLength * 2);
-
     // starting index for each chunks
     let elemIndex1 = 0;
     let elemIndex2 = sectionLength;
     let elemIndex3 = sectionLength * 2;
 
+    // save num of elements for each chunk
+    const file1 = `${testFileName}1`;
+    const file2 = `${testFileName}2`;
+    const file3 = `${testFileName}3`;
+    let currentTestData1 = await readJson(file1);
+    let currentTestData2 = await readJson(file2);
+    let currentTestData3 = await readJson(file3);
+
+    currentTestData1.elementIndex = elemIndex1;
+    currentTestData2.elementIndex = elemIndex2;
+    currentTestData3.elementIndex = elemIndex3;
+    currentTestData1.totalElems = sectionLength;
+    currentTestData2.totalElems = sectionLength;
+    currentTestData3.totalElems = totalElems - sectionLength * 2;
+
+    saveToJson(currentTestData1, file1);
+    saveToJson(currentTestData2, file2);
+    saveToJson(currentTestData3, file3);
+
     let elemCt = 0;
     while (elemCt < totalElems) {
-
-        // set elem for each chunks
-        const testElem1 = testElems[elemIndex1];
-        const testElem2 = testElems[elemIndex2];
-        const testElem3 = testElems[elemIndex3];
-
-        console.log(
-            `Currently testing: ${testElem.element.tagName} - 
-            src: ${testElem.element?.src || 'N/A'} - 
-            href: ${testElem.element?.href || 'N/A'}`
-        );
-        
         // get current status of each chunks
-        let currentTestData1 = await readJson(`${testFileName}1`);
-        let currentTestData2 = await readJson(`${testFileName}2`);
-        let currentTestData3 = await readJson(`${testFileName}3`);
-        
-        if (testElem1.src) {
-            currentTestData1.elementSrc = testElem1.src;
-        }
-        if (testElem2.src) {
-            currentTestData2.elementSrc = testElem2.src;
-        }
-        if (testElem3.src) {
-            currentTestData3.elementSrc = testElem3.src;
-        }
+        currentTestData1 = await readJson(`${testFileName}1`);
+        currentTestData2 = await readJson(`${testFileName}2`);
+        currentTestData3 = await readJson(`${testFileName}3`);
 
-        const element = testElem1.element;
-        const parent = testElem.element.parentElement;
+        // handling first chunk
+        if (
+            currentTestData1.elementIndex >= elemIndex1 &&
+            currentTestData1.elementIndex < sectionLength
+        ) {
+            const currentElem1 = testElems[elemIndex1];
+            let element = currentElem1.element;
+            let parent = currentElem1.element.parentElement;
 
-        // mark element for SS
-        const oldStyle = element.style.border;
-        element.style.border = '3px solid red';
+            console.log(
+                `Currently testing: ${element.tagName} - 
+                src: ${element?.src || 'N/A'} - 
+                href: ${element?.href || 'N/A'}`
+            );
 
-        // screenshot the modified page for current test
-        await window.takeScreenshot(currentTestData.elementNum);
+            // take SS of test elem
+            takeTestSS(element);
 
-        // revert styles
-        element.style.border = oldStyle;
+            // modify html
+            element.parentNode.removeChild(element);
 
-        // modify html
-        element.parentNode.removeChild(element);
+            // download modified html
+            await window.downloadAndReplacePage(1);
 
-        // download modified html
-        await window.downloadAndReplacePage();
+            // update webhost files
+            await window.gitPushData(1);
 
-        // update webhost files
-        await window.gitPushData();
-        
-        // wait for web hook / testing to complete
-        while (!currentTestData.elementCompleted) {
-            currentTestData = await readJson(testFileName);
+            // add element back
+            parent.appendChild(element);
             
-            await sleep(2500);
-            currentTestData = await readJson(testFileName);
-            console.log(`Waiting for ${testElem.tagName}... test completed: ${currentTestData.elementCompleted}`);
-            await sleep(2500);
-        };
+            elemIndex1 += 1;
 
-        // add element back
-        parent.appendChild(element);
+            // update test data file
+            if (element.src) {
+                currentTestData1.elementSrc = element.src;
+            }
+            currentTestData1.elementType = element.tagName;
+            currentTestData1.elementCompleted = false;
 
-        // update test data file
-        saveToJson({
-            elementNum: i + 1,
-            elementType: testElem.tagName,
-            elementSrc: currentTestData.elementSrc,
-            elementCompleted: false,
-            analysisCompleted: i === (testElems.length - 1),
-            totalElems: totalFilteredElem,
-            startTime: currentTestData.startTime,
-            endTime: currentTestData.endTime,
-        }, testFileName);
+            saveToJson(currentTestData1, file1);
+        }
 
-        if (i === (testElems.length - 1)) {
-            console.log('PageSpeed testing completed!');
-        };
+        // handling second chunk
+        if (
+            currentTestData2.elementIndex >= elemIndex2 &&
+            currentTestData2.elementIndex < sectionLength * 2
+        ) {
+            const currentElem2 = testElems[elemIndex2];
+            let element = currentElem2.element;
+            let parent = currentElem2.element.parentElement;
+
+            console.log(
+                `Currently testing: ${element.tagName} - 
+                src: ${element?.src || 'N/A'} - 
+                href: ${element?.href || 'N/A'}`
+            );
+
+            // take SS of test elem
+            takeTestSS(element);
+
+            // modify html
+            element.parentNode.removeChild(element);
+
+            // download modified html
+            await window.downloadAndReplacePage(2);
+
+            // update webhost files
+            await window.gitPushData(2);
+
+            // add element back
+            parent.appendChild(element);
+            
+            elemIndex2 += 1;
+
+            // update test data file
+            if (element.src) {
+                currentTestData2.elementSrc = element.src;
+            }
+            currentTestData2.elementType = element.tagName;
+            currentTestData2.elementCompleted = false;
+
+            saveToJson(currentTestData2, file2);
+        }
+
+        // handling third chunk
+        if (
+            currentTestData3.elementIndex >= elemIndex3 &&
+            currentTestData3.elementIndex < totalElems
+        ) {
+            const currentElem3 = testElems[elemIndex3];
+            let element = currentElem3.element;
+            let parent = currentElem3.element.parentElement;
+
+            console.log(
+                `Currently testing: ${element.tagName} - 
+                src: ${element?.src || 'N/A'} - 
+                href: ${element?.href || 'N/A'}`
+            );
+
+            // take SS of test elem
+            takeTestSS(element);
+
+            // modify html
+            element.parentNode.removeChild(element);
+
+            // download modified html
+            await window.downloadAndReplacePage(3);
+
+            // update webhost files
+            await window.gitPushData(3);
+
+            // add element back
+            parent.appendChild(element);
+            
+            elemIndex3 += 1;
+
+            // update test data file
+            if (element.src) {
+                currentTestData3.elementSrc = element.src;
+            }
+            currentTestData3.elementType = element.tagName;
+            currentTestData3.elementCompleted = false;
+
+            saveToJson(currentTestData3, file3);
+        }
+
+        console.log(`Waiting to test an element...`);
+        await sleep(2500);
     };
 
+    console.log('PageSpeed testing completed!');
     return testElems;
 }, psc, testFileName);
   
@@ -413,9 +499,10 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
     // create init test data file
     const testData1 = {
         siteID: process.env.NETLIFY_SITE_1_ID,
-        elementNum: -1,
+        elementIndex: -1,
         elementType: '',
         elementSrc: '',
+        initialized: false,
         elementCompleted: false,
         analysisCompleted: false,
         totalElems: 0,
@@ -424,9 +511,10 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
     };
     const testData2 = {
         siteID: process.env.NETLIFY_SITE_2_ID,
-        elementNum: -1,
+        elementIndex: -1,
         elementType: '',
         elementSrc: '',
+        initialized: false,
         elementCompleted: false,
         analysisCompleted: false,
         totalElems: 0,
@@ -435,9 +523,10 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
     };
     const testData3 = {
         siteID: process.env.NETLIFY_SITE_3_ID,
-        elementNum: -1,
+        elementIndex: -1,
         elementType: '',
         elementSrc: '',
+        initialized: false,
         elementCompleted: false,
         analysisCompleted: false,
         totalElems: 0,
@@ -450,9 +539,9 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
     saveToJson(testData3, testFileName3);
 
     // baseline report
-    const results = await runPagespeedApi();
     const reportNum = 3;
     for (i=0; i < reportNum; i++) {
+        const results = await runPagespeedApi();
         saveReportAsJson(`lh-report-initial-${i}`, results, timestamp);
     }
 
@@ -460,9 +549,9 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
     let currentTestData2 = await readJson(testFileName2);
     let currentTestData3 = await readJson(testFileName3);
 
-    while (currentTestData1.elementNum === -1 ||
-        currentTestData2.elementNum === -1 ||
-        currentTestData3.elementNum === -1
+    while (!currentTestData1.initialized ||
+        !currentTestData2.initialized ||
+        !currentTestData3.initialized
     ) {
         currentTestData1 = await readJson(testFileName1);
         currentTestData2 = await readJson(testFileName2);
