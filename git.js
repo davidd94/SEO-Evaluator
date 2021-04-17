@@ -1,8 +1,9 @@
 const { exec } = require('child_process');
 
 
-async function gitPush() {
-    await exec('sh git-push.sh', (err, stdout, stderr) => {
+async function gitPush(repoID) {
+    process
+    await exec(`sh git-push.sh --repoID ${repoID}`, (err, stdout, stderr) => {
         if (err) {
             console.log(`error: ${err.message}`);
             return;

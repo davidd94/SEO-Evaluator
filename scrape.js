@@ -58,9 +58,9 @@ async function scrapeAndDownloadPage(url=null, filePath=null) {
     return true;
 };
 
-async function gitPushScrapeData(folderPath = '/baseScrapeData') {
+async function gitPushScrapeData(repoID, folderPath = '/baseScrapeData') {
     const scrapeDir = projectDir + folderPath;
-    const gitDir = projectDir + '/../seo-testing';
+    const gitDir = projectDir + `/../seo-testing${repoID}`;
     const tmpDir = projectDir + '/tmp/.git';
 
     // remove old repo files, dir persist
@@ -88,7 +88,7 @@ async function gitPushScrapeData(folderPath = '/baseScrapeData') {
     };
 
     // run script to auto push new files to git
-    await git.gitPush();
+    await git.gitPush(repoID);
     console.log('Pushing new files to git...');
 
     // copy over new .git folder

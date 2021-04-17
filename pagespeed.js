@@ -304,7 +304,16 @@ async function scrapeElemsAndTest(page) {
     console.log(`Footer count ${footerCt}`);
     console.log(`Final total filtered elements: ${totalFilteredElem}`);
     
-    for (let i = 0; i < testElems.length; i++) {
+    // split elements to chunks
+    const totalElems = testElems.length;
+    const sectionLength = Math.floor(totalElems / 3);
+
+    const testElems1 = testElems.slice(0, sectionLength);
+    const testElems2 = testElems.slice(sectionLength, sectionLength * 2);
+    const testElems3 = testElems.slice(sectionLength * 2);
+
+    let elemCt = 0;
+    while (elemCt < totalElems) {
         const testElem = testElems[i];
         console.log(
             `currently testing: ${testElem.element.tagName} - 

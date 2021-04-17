@@ -1,7 +1,8 @@
 # Make executable with chmod +x <<filename.sh>>
-
+echo $repoID
+echo $pwd
 CURRENTDIR=${pwd}
-PROJECT_PATH="/$HOME/projects/seo-testing"
+PROJECT_PATH="/$HOME/projects/seo-testing$repoID"
 
 cd "$PROJECT_PATH"
 
