@@ -1,13 +1,12 @@
 const ExcelJS = require('exceljs');
 
 class ExcelWorkbook {
-    constructor(fileID, creator, testData={}, url='') {
-        this.fileID = fileID;
+    constructor(creator, testData={}, url='') {
         this.creator = creator;
         this.testData = testData;
         this.url = url || process.env.PAGE_URL;
 
-        this.fileName = `${fileID}-pagespeed-results.xlsx`;
+        this.fileName = `pagespeed-results.xlsx`;
         this.workbook = new ExcelJS.Workbook();
     }
 
@@ -32,6 +31,7 @@ class ExcelWorkbook {
         // set information box
         const rowData = [
             ['Client URL: ', this.url],
+            ['Repo ID: ', this.repoID],
             ['Num of Test Elements: ', this.testData.totalElems || ''],
             ['Start Time: ', this.testData.startTime || ''],
             ['End Time: ', this.testData.endTime || ''],

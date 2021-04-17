@@ -39,10 +39,10 @@ async function _newBrowser() {
     return { browser, page };
 };
 
-function _setUpQuery() {
+function _setUpQuery(url) {
     const api = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
     const parameters = {
-      url: encodeURIComponent(process.env.NETLIFY_URL || '')
+      url: encodeURIComponent(url || '')
     };
     let query = `${api}?`;
     for (key in parameters) {
@@ -51,9 +51,9 @@ function _setUpQuery() {
     return query;
 };
 
-async function runPagespeedApi() {
-    const url = _setUpQuery();
-    const results = await fetch(url)
+async function runPagespeedApi(url=process.env.NETLIFY_SITE_1_URL) {
+    const pageSpeedQuery = _setUpQuery(url);
+    const results = await fetch(pageSpeedQuery)
       .then(response => response.json())
       .then(json => {
         // See https://developers.google.com/speed/docs/insights/v5/reference/pagespeedapi/runpagespeed#response
@@ -78,20 +78,6 @@ async function runPagespeedApi() {
 };
 
 async function scrapeElemsAndTest(page) {
-    function takeTestSS(testElem) {
-        const element = testElem.element;
-
-        // mark element for SS
-        const oldStyle = element.style.border;
-        element.style.border = '3px solid red';
-
-        // screenshot the modified page for current test
-        await window.takeScreenshot(currentTestData.elementIndex);
-
-        // revert styles
-        element.style.border = oldStyle;
-    }
-
     const testFileName = process.env.TEST_FILE_NAME;
 
     // inject functions into puppeteer browser
@@ -368,8 +354,15 @@ async function scrapeElemsAndTest(page) {
                 href: ${element?.href || 'N/A'}`
             );
 
-            // take SS of test elem
-            takeTestSS(element);
+            // mark element for SS
+            const oldStyle = element.style.border;
+            element.style.border = '3px solid red';
+
+            // screenshot the modified page for current test
+            await window.takeScreenshot(currentTestData1.elementIndex);
+
+            // revert styles
+            element.style.border = oldStyle;
 
             // modify html
             element.parentNode.removeChild(element);
@@ -384,6 +377,7 @@ async function scrapeElemsAndTest(page) {
             parent.appendChild(element);
             
             elemIndex1 += 1;
+            elemCt += 1;
 
             // update test data file
             if (element.src) {
@@ -410,8 +404,15 @@ async function scrapeElemsAndTest(page) {
                 href: ${element?.href || 'N/A'}`
             );
 
-            // take SS of test elem
-            takeTestSS(element);
+            // mark element for SS
+            const oldStyle = element.style.border;
+            element.style.border = '3px solid red';
+
+            // screenshot the modified page for current test
+            await window.takeScreenshot(currentTestData2.elementIndex);
+
+            // revert styles
+            element.style.border = oldStyle;
 
             // modify html
             element.parentNode.removeChild(element);
@@ -426,6 +427,7 @@ async function scrapeElemsAndTest(page) {
             parent.appendChild(element);
             
             elemIndex2 += 1;
+            elemCt += 1;
 
             // update test data file
             if (element.src) {
@@ -447,13 +449,18 @@ async function scrapeElemsAndTest(page) {
             let parent = currentElem3.element.parentElement;
 
             console.log(
-                `Currently testing: ${element.tagName} - 
-                src: ${element?.src || 'N/A'} - 
-                href: ${element?.href || 'N/A'}`
+                `Currently testing: ${element.tagName} >> src: ${element?.src || 'N/A'} >> href: ${element?.href || 'N/A'}`
             );
 
-            // take SS of test elem
-            takeTestSS(element);
+            // mark element for SS
+            const oldStyle = element.style.border;
+            element.style.border = '3px solid red';
+
+            // screenshot the modified page for current test
+            await window.takeScreenshot(currentTestData3.elementIndex);
+
+            // revert styles
+            element.style.border = oldStyle;
 
             // modify html
             element.parentNode.removeChild(element);
@@ -468,6 +475,7 @@ async function scrapeElemsAndTest(page) {
             parent.appendChild(element);
             
             elemIndex3 += 1;
+            elemCt += 1;
 
             // update test data file
             if (element.src) {
@@ -490,7 +498,7 @@ async function scrapeElemsAndTest(page) {
   return true;
 };
 
-async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
+async function pagespeedEvaluation(url=process.env.NETLIFY_SITE_1_URL) {
     const testFileName1 = `${process.env.TEST_FILE_NAME}1`;
     const testFileName2 = `${process.env.TEST_FILE_NAME}2`;
     const testFileName3 = `${process.env.TEST_FILE_NAME}3`;
@@ -543,6 +551,7 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_URL) {
     for (i=0; i < reportNum; i++) {
         const results = await runPagespeedApi();
         saveReportAsJson(`lh-report-initial-${i}`, results, timestamp);
+        await sleep(3000);
     }
 
     let currentTestData1 = await readJson(testFileName1);
