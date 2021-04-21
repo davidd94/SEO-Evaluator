@@ -17,7 +17,6 @@
     "express": "^4.17.1",
     "fs-extra": "^9.0.1",
     "inquirer": "^7.3.3",
-    "lighthouse": "^6.5.0",
     "lodash": "^4.17.20",
     "node-fetch": "^2.6.1",
     "puppeteer": "^5.5.0"

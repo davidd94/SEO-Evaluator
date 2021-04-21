@@ -3,7 +3,7 @@ const puppeteer = require("puppeteer");
 const fetch = require("node-fetch");
 const fs = require("fs-extra");
 
-const lh = require("./lighthouse");
+const { ExcelWorkbook } = require('./excel');
 const scrape = require("./scrape");
 const { saveReportAsJson, saveToJson, readJson, sleep, getFileExtension } = require('./utils');
 const { timestamp, psc } = require("./settings");
@@ -13,7 +13,7 @@ async function _newBrowser() {
     var browser = await puppeteer.launch({
         // executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
         ignoreDefaultArgs: true,
-        headless: false,
+        headless: true,
         defaultViewport: null,
     });
 
@@ -137,7 +137,7 @@ async function scrapeElemsAndTest(page) {
         const height = elem.height;
         const width = elem.width;
         const topElementText = elem?.firstChild?.nodeValue?.replace(/\s+/g, '') || '';
-        const elemLimit = 2;
+        const elemLimit = 3;
 
         const elemData = {
             action: '',
@@ -191,7 +191,6 @@ async function scrapeElemsAndTest(page) {
             // Grab all src with suffix .js
             const fileType = await window.getFileExtension(elem.src);
             if (fileType === 'js') {
-                console.log(elem.src);
                 elemData.action = 'remove';
                 elemData.element = elem;
                 elemData.type = elem.tagName;
@@ -333,7 +332,12 @@ async function scrapeElemsAndTest(page) {
     saveToJson(currentTestData3, file3);
 
     let elemCt = 0;
-    while (elemCt < totalElems) {
+    while (
+        !currentTestData1.analysisCompleted ||
+        !currentTestData2.analysisCompleted ||
+        !currentTestData3.analysisCompleted
+    ) {
+        console.log(`current element count ${elemCt}`);
         // get current status of each chunks
         currentTestData1 = await readJson(`${testFileName}1`);
         currentTestData2 = await readJson(`${testFileName}2`);
@@ -356,7 +360,7 @@ async function scrapeElemsAndTest(page) {
 
             // mark element for SS
             const oldStyle = element.style.border;
-            element.style.border = '3px solid red';
+            element.style.border = '5px solid red';
 
             // screenshot the modified page for current test
             await window.takeScreenshot(currentTestData1.elementIndex);
@@ -386,6 +390,14 @@ async function scrapeElemsAndTest(page) {
             currentTestData1.elementType = element.tagName;
             currentTestData1.elementCompleted = false;
 
+            saveToJson(currentTestData1, file1);
+        } else if (
+            currentTestData1.elementIndex >= elemIndex1 &&
+            currentTestData1.elementIndex >= sectionLength &&
+            !currentTestData1.analysisCompleted
+        ) {
+            currentTestData1.analysisCompleted = true;
+            currentTestData1.endTime = new Date().toTimeString();
             saveToJson(currentTestData1, file1);
         }
 
@@ -437,6 +449,14 @@ async function scrapeElemsAndTest(page) {
             currentTestData2.elementCompleted = false;
 
             saveToJson(currentTestData2, file2);
+        } else if (
+            currentTestData2.elementIndex >= elemIndex2 &&
+            currentTestData2.elementIndex >= sectionLength * 2 &&
+            !currentTestData2.analysisCompleted
+        ) {
+            currentTestData2.analysisCompleted = true;
+            currentTestData2.endTime = new Date().toTimeString();
+            saveToJson(currentTestData2, file2);
         }
 
         // handling third chunk
@@ -485,6 +505,14 @@ async function scrapeElemsAndTest(page) {
             currentTestData3.elementCompleted = false;
 
             saveToJson(currentTestData3, file3);
+        } else if (
+            currentTestData3.elementIndex >= elemIndex3 &&
+            currentTestData3.elementIndex >= totalElems &&
+            !currentTestData3.analysisCompleted
+        ) {
+            currentTestData3.analysisCompleted = true;
+            currentTestData3.endTime = new Date().toTimeString();
+            saveToJson(currentTestData3, file3);
         }
 
         console.log(`Waiting to test an element...`);
@@ -492,7 +520,59 @@ async function scrapeElemsAndTest(page) {
     };
 
     console.log('PageSpeed testing completed!');
-    return testElems;
+    console.log('Saving data to excel sheet...');
+
+    const resultFileName = 'results';
+    const results1 = `${resultFileName}1`;
+    const results2 = `${resultFileName}2`;
+    const results3 = `${resultFileName}3`;
+
+    const data1 = readJson(results1);
+    const data2 = readJson(results2);
+    const data3 = readJson(results3);
+
+    const allData = data1.concat(data2).concat(data3);
+
+    // get excel and save final results
+    const workbook = new ExcelWorkbook(
+        creator='DavidDee',
+        initData={
+            totalElems: totalElems,
+            startTime: currentTestData1.startTime,
+            endTime: new Date().toTimeString(),
+        },
+    );
+    await workbook.initWorkbook();
+
+    // iterate through all elements
+    allData.forEach((elemData) => {
+        const elementType = elemData['element'];
+        const src = elemData['src'];
+        const results = elemData['results'];
+
+        // add new section
+        workbook.addNewSection(elementType, src);
+        
+        // iterate through each element's test results
+        results.forEach((result, index) => {
+            // iterate through each result types
+            const row = [index + 1];
+            Object.values(result).forEach((testData) => {
+                row.push(testData.score);
+                row.push(testData.displayValue);
+                row.push(testData.numericValue);
+            });
+            workbook.addDataRow(row);
+        });
+
+    });
+
+    // save to excel
+    await workbook.saveWorkbookAsFile();
+
+    console.log('PageSpeed analysis completed!');
+
+    return true;
 }, psc, testFileName);
   
   return true;
@@ -546,14 +626,19 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_SITE_1_URL) {
     saveToJson(testData2, testFileName2);
     saveToJson(testData3, testFileName3);
 
-    // baseline report
-    const reportNum = 3;
-    for (i=0; i < reportNum; i++) {
-        const results = await runPagespeedApi();
-        saveReportAsJson(`lh-report-initial-${i}`, results, timestamp);
-        await sleep(3000);
-    }
+    // create init results
+    const resultsFileName1 = `${process.env.RESULT_FILE_NAME}1`;
+    const resultsFileName2 = `${process.env.RESULT_FILE_NAME}2`;
+    const resultsFileName3 = `${process.env.RESULT_FILE_NAME}3`;
+    const results1 = [];
+    const results2 = [];
+    const results3 = [];
 
+    saveToJson(results1, resultsFileName1);
+    saveToJson(results2, resultsFileName2);
+    saveToJson(results3, resultsFileName3);
+
+    // wait for sites to deploy before testing
     let currentTestData1 = await readJson(testFileName1);
     let currentTestData2 = await readJson(testFileName2);
     let currentTestData3 = await readJson(testFileName3);
@@ -567,6 +652,39 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_SITE_1_URL) {
         currentTestData3 = await readJson(testFileName3);
         await sleep(2000);
         console.log('Waiting for initial git push to complete...');
+    }
+
+    // baseline report - create excel
+    const workbook = new ExcelWorkbook(
+        creator='DavidDee',
+        initData={
+            startTime: new Date().toTimeString(),
+        },
+    );
+    await workbook.initWorkbook();
+
+    // init new section for elem
+    workbook.addNewSection('Baseline with all elements', '*');
+
+    const reportNum = 3;
+    for (i=0; i < reportNum; i++) {
+        console.log(`Running baseline PageSpeed Test: ${i + 1}`);
+        const results = await runPagespeedApi(process.env.NETLIFY_SITE_1_URL);
+        
+        // add data
+        const row = [i + 1];
+        Object.values(results).forEach((result) => {
+            row.push(result.score);
+            row.push(result.displayValue);
+            row.push(result.numericValue);
+        });
+        workbook.addDataRow(row);
+
+        // save to excel
+        await workbook.saveWorkbookAsFile();
+        console.log('baseline sleeping..');
+        await sleep(15000);
+        console.log('baseline sleeping over');
     }
 
     // init browser

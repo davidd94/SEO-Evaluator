@@ -55,11 +55,11 @@ const { ExcelWorkbook } = require('./excel');
 //     await scraper.scrapeAndDownloadPage(url='https://www.511tactical.com/norris-sneaker-multicam-1.html');
 // })();
 
-(async () => {
-  await scraper.gitPushScrapeData(1);
-  await scraper.gitPushScrapeData(2);
-  await scraper.gitPushScrapeData(3);
-})();
+// (async () => {
+//   await scraper.gitPushScrapeData(1);
+//   await scraper.gitPushScrapeData(2);
+//   await scraper.gitPushScrapeData(3);
+// })();
 
 // (async () => {
 //     await ps.pagespeedEvaluation('https://objective-bohr-9ff531.netlify.app/');
@@ -139,3 +139,80 @@ const { ExcelWorkbook } = require('./excel');
 
 //     await workbook.saveWorkbookAsFile();
 // })();
+
+(async () => {
+    const testDataName = 'currentTestData';
+    const testData1 = `${testDataName}1`;
+    const testData2 = `${testDataName}2`;
+    const testData3 = `${testDataName}3`;
+
+    const testFileName = 'results';
+    const file1 = `${testFileName}1`;
+    const file2 = `${testFileName}2`;
+    const file3 = `${testFileName}3`;
+
+    let currentTestData1 = await readJson(testData1);
+    let currentTestData2 = await readJson(testData2);
+    let currentTestData3 = await readJson(testData3);
+
+    while (
+        !currentTestData1.analysisCompleted ||
+        !currentTestData2.analysisCompleted ||
+        !currentTestData3.analysisCompleted
+    ) {
+        console.log('Waiting for the last few tests to complete...');
+        currentTestData1 = await readJson(testData1);
+        currentTestData2 = await readJson(testData2);
+        currentTestData3 = await readJson(testData3);
+        await sleep(2500);
+    }
+
+    console.log('Saving data to excel sheet...');
+
+    const data1 = await readJson(file1);
+    const data2 = await readJson(file2);
+    const data3 = await readJson(file3);
+
+    const allData = data1.concat(data2).concat(data3);
+
+    // get excel and save final results
+    const workbook = new ExcelWorkbook(
+        creator='DavidDee',
+        initData={
+            totalElems: 100,
+            startTime: currentTestData1.startTime,
+            endTime: new Date().toTimeString(),
+        },
+    );
+    await workbook.initWorkbook();
+
+    // iterate through all elements
+    allData.forEach((elemData) => {
+        const elementType = elemData['element'];
+        const src = elemData['src'];
+        const results = elemData['results'];
+
+        // add new section
+        workbook.addNewSection(elementType, src);
+        
+        // iterate through each element's test results
+        results.forEach((result, index) => {
+            // iterate through each result types
+            const row = [index + 1];
+            Object.values(result).forEach((testData) => {
+                row.push(testData.score);
+                row.push(testData.displayValue);
+                row.push(testData.numericValue);
+            });
+            workbook.addDataRow(row);
+        });
+
+    });
+
+    // save to excel
+    await workbook.saveWorkbookAsFile();
+
+    console.log('PageSpeed analysis completed!');
+
+    return true;
+})();

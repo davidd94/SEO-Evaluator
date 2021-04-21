@@ -6,7 +6,7 @@ const dotenv = require("dotenv");
 const { ExcelWorkbook } = require('./excel');
 const ps = require("./pagespeed");
 const scraper = require("./scrape");
-const { saveToJson, readJson, saveReportAsJson, sleep } = require('./utils');
+const { saveToJson, readJson, sleep } = require('./utils');
 
 // Setup env vars
 dotenv.config();
@@ -51,6 +51,7 @@ initPagespeedEval().then(async (succeeded) => {
             // Call your action on the request
             if (req.body['state'] === 'ready') {
                 const testFileName = process.env.TEST_FILE_NAME;
+                const resultFileName = process.env.RESULT_FILE_NAME;
                 const maxTestNum = process.env.NUM_OF_PAGESPEED_TESTS;
 
                 const hookSiteID = req.body['site_id'];
@@ -73,23 +74,19 @@ initPagespeedEval().then(async (succeeded) => {
                 }
 
                 const testChunkFileName = `${testFileName}${chunkNum}`;
+                const resultChunkFileName = `${resultFileName}${chunkNum}`;
 
                 let currentTestData = await readJson(testChunkFileName);
-
-                console.log(`Currently running - Site ID (${hookSiteID}) - Test Elem ID (${currentTestData.elementIndex}) - Elem Type (${currentTestData.elementType})`);
+                const resultsData = await readJson(resultChunkFileName);
 
                 if (currentTestData.initialized) {
+                    console.log(`Currently running - Site ID (${hookSiteID}) - Test Elem ID (${currentTestData.elementIndex}) - Elem Type (${currentTestData.elementType})`);
                     let currentTestNum = 1;
-
-                    // create excel
-                    const workbook = new ExcelWorkbook(
-                        creator='DavidDee',
-                        testData=currentTestData,
-                    );
-                    await workbook.initWorkbook();
-
-                    // init new section for elem
-                    workbook.addNewSection(currentTestData.elementType, currentTestData.elementSrc);
+                    const testResult = {
+                        element: currentTestData.elementType,
+                        src: currentTestData.elementSrc,
+                        results: [],
+                    };
 
                     // run test X amount and record
                     while (currentTestNum <= maxTestNum) {
@@ -97,33 +94,19 @@ initPagespeedEval().then(async (succeeded) => {
         
                         // run pagespeed API
                         const results = await ps.runPagespeedApi(siteURL);
-                        
-                        // add data
-                        const row = [];
-                        Object.values(results).forEach((result) => {
-                            row.push(currentTestNum);
-                            row.push(result.score);
-                            row.push(result.displayValue);
-                            row.push(result.numericValue);
-                        });
-                        workbook.addDataRow(row);
 
-                        // save to excel
-                        await workbook.saveWorkbookAsFile();
+                        testResult['results'].push(results);
                 
                         currentTestNum += 1;
         
-                        await sleep(3000);
+                        await sleep(10000);
                     };
 
+                    resultsData.push(testResult);
+
+                    saveToJson(resultsData, resultChunkFileName);
+
                     console.log(`Test completed - Site ID (${hookSiteID}) - Test Elem ID (${currentTestData.elementIndex}) - Elem Type (${currentTestData.elementType})`);
-                    
-                    if (currentTestData.analysisCompleted) {
-                        currentTestData.endTime = new Date().toTimeString();
-                        console.log('PageSpeed Analysis completed!');
-                    } else {
-                        console.log('Starting next element test soon...');
-                    };
 
                     // set completed and save test data file
                     currentTestData.elementCompleted = true;
@@ -132,6 +115,7 @@ initPagespeedEval().then(async (succeeded) => {
                     console.log(currentTestData);
                     saveToJson(currentTestData, testChunkFileName);
                 } else if (!currentTestData.initialized) {
+                    console.log(`Initialized - Site ID (${hookSiteID})`);
                     currentTestData.initialized = true;
                     saveToJson(currentTestData, testChunkFileName);
                 }

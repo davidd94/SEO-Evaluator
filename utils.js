@@ -1,29 +1,6 @@
 const fs = require("fs-extra");
-const { generateReport } = require("lighthouse/lighthouse-core/report/report-generator");
 
 const settings = require("./settings");
-
-function saveReportAsJson(fileName, lhr) {
-    const timestamp = settings.timestamp;
-    const evalDir = './evaluations';
-
-    // create eval
-    fs.access(evalDir, (err) => {
-        if (err && err.code === 'ENOENT') {
-            fs.mkdirSync(evalDir);
-        };
-    });
-
-    // create results
-    const resultDir = evalDir + '/' + timestamp;
-    fs.access(resultDir, (err) => {
-        if (err && err.code === 'ENOENT') {
-            fs.mkdirSync(resultDir);
-        };
-        // generateReport can output JSON, CSV and HTML
-        fs.writeFileSync(`${resultDir}/${timestamp}-${fileName}.json`, generateReport(lhr, "json"));
-    });
-};
 
 function saveToJson(data, fileName, dir='') {
     const evalDir = dir || './evaluations';
@@ -66,7 +43,6 @@ async function getFileExtension(fileStr) {
     return ext || '';
 };
 
-exports.saveReportAsJson = saveReportAsJson;
 exports.saveToJson = saveToJson;
 exports.readJson = readJson;
 exports.sleep = sleep;

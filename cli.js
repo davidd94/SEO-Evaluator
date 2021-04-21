@@ -1,4 +1,3 @@
-const lh = require('./lighthouse');
 const scraper = require('./scrape');
 const arg = require('arg');
 const inquirer = require('inquirer');

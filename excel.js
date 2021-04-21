@@ -1,9 +1,9 @@
 const ExcelJS = require('exceljs');
 
 class ExcelWorkbook {
-    constructor(creator, testData={}, url='') {
+    constructor(creator, initData={}, url='') {
         this.creator = creator;
-        this.testData = testData;
+        this.initData = initData;
         this.url = url || process.env.PAGE_URL;
 
         this.fileName = `pagespeed-results.xlsx`;
@@ -19,6 +19,13 @@ class ExcelWorkbook {
         
         // if workbook exists
         if (this.workbook.worksheets.length > 0) {
+            if (this.initData) {
+                const totalElementCell = this.workbook.worksheets[0].getCell('B3');
+                const endTimeCell = this.workbook.worksheets[0].getCell('B5');
+
+                totalElementCell.value = this.initData.totalElems;
+                endTimeCell.value = this.initData.endTime;
+            }
             return;
         };
     
@@ -32,9 +39,9 @@ class ExcelWorkbook {
         const rowData = [
             ['Client URL: ', this.url],
             ['Repo ID: ', this.repoID],
-            ['Num of Test Elements: ', this.testData.totalElems || ''],
-            ['Start Time: ', this.testData.startTime || ''],
-            ['End Time: ', this.testData.endTime || ''],
+            ['Num of Test Elements: ', this.initData.totalElems || ''],
+            ['Start Time: ', this.initData.startTime || ''],
+            ['End Time: ', this.initData.endTime || ''],
             ['Test Duration: ', 'WIP'],
             [' ', ' '],
         ]
