@@ -1,8 +1,10 @@
 const { saveToJson, readJson, sleep, exposeModuleMethods } = require('./utils');
 const puppeteer = require("puppeteer");
+const _ = require('lodash');
 
 const ps = require("./pagespeed");
 const scraper = require("./scrape");
+const git = require('./git');
 const { ExcelWorkbook } = require('./excel');
 
 // (async () => {
@@ -52,13 +54,16 @@ const { ExcelWorkbook } = require('./excel');
 // })();
 
 // (async () => {
-//     await scraper.scrapeAndDownloadPage(url='https://www.511tactical.com/norris-sneaker-multicam-1.html');
+//     await scraper.scrapeAndDownloadPage(url='https://www.enfamil.com/products/enfamil-neuropro-enfacare-formula/');
+//     await git.forcePushScrapeData(1);
+//     await git.forcePushScrapeData(2);
+//     await git.forcePushScrapeData(3);
 // })();
 
 // (async () => {
-//   await scraper.gitPushScrapeData(1);
-//   await scraper.gitPushScrapeData(2);
-//   await scraper.gitPushScrapeData(3);
+//   await git.pushElemChange(1);
+//   await git.pushElemChange(2);
+//   await git.pushElemChange(3);
 // })();
 
 // (async () => {
@@ -151,9 +156,9 @@ const { ExcelWorkbook } = require('./excel');
     const file2 = `${testFileName}2`;
     const file3 = `${testFileName}3`;
 
-    let currentTestData1 = await readJson(testData1);
-    let currentTestData2 = await readJson(testData2);
-    let currentTestData3 = await readJson(testData3);
+    let currentTestData1 = readJson(testData1);
+    let currentTestData2 = readJson(testData2);
+    let currentTestData3 = readJson(testData3);
 
     while (
         !currentTestData1.analysisCompleted ||
@@ -161,19 +166,19 @@ const { ExcelWorkbook } = require('./excel');
         !currentTestData3.analysisCompleted
     ) {
         console.log('Waiting for the last few tests to complete...');
-        currentTestData1 = await readJson(testData1);
-        currentTestData2 = await readJson(testData2);
-        currentTestData3 = await readJson(testData3);
+        currentTestData1 = readJson(testData1);
+        currentTestData2 = readJson(testData2);
+        currentTestData3 = readJson(testData3);
         await sleep(2500);
     }
 
     console.log('Saving data to excel sheet...');
 
-    const data1 = await readJson(file1);
-    const data2 = await readJson(file2);
-    const data3 = await readJson(file3);
+    const data1 = readJson(file1) || [];
+    const data2 = readJson(file2) || [];
+    const data3 = readJson(file3) || [];
 
-    const allData = data1.concat(data2).concat(data3);
+    const allData = _.concat(data1, data2, data3);
 
     // get excel and save final results
     const workbook = new ExcelWorkbook(
@@ -188,24 +193,92 @@ const { ExcelWorkbook } = require('./excel');
 
     // iterate through all elements
     allData.forEach((elemData) => {
+        function parseStringToNumber(stringVal) {
+            if (typeof stringVal == 'string') {
+                return Number(stringVal.replace(/[^.0-9]/g, ''));
+            }
+            return 0;
+        };
+
         const elementType = elemData['element'];
         const src = elemData['src'];
         const results = elemData['results'];
 
         // add new section
         workbook.addNewSection(elementType, src);
+
+        // avg scores
+        let fcpScore = 0;
+        let siScore = 0;
+        let ttiScore = 0;
+        let fmpScore = 0;
+        let gciScore = 0;
+        let eilScore = 0;
+
+        // avg display values
+        let fcpDisplayVal = 0;
+        let siDisplayVal = 0;
+        let ttiDisplayVal = 0;
+        let fmpDisplayVal = 0;
+        let gciDisplayVal = 0;
+        let eilDisplayVal = 0;
+
+        // avg numeric values
+        let fcpNumericVal = 0;
+        let siNumericVal = 0;
+        let ttiNumericVal = 0;
+        let fmpNumericVal = 0;
+        let gciNumericVal = 0;
+        let eilNumericVal = 0;
         
         // iterate through each element's test results
         results.forEach((result, index) => {
             // iterate through each result types
             const row = [index + 1];
-            Object.values(result).forEach((testData) => {
+            Object.values(result).forEach((testData, idx) => {
+                if (idx === 0) {
+                    fcpScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    fcpDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    fcpNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                } else if (idx === 1) {
+                    siScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    siDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    siNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                } else if (idx === 2) {
+                    ttiScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    ttiDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    ttiNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                } else if (idx === 3) {
+                    fmpScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    fmpDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    fmpNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                } else if (idx === 4) {
+                    gciScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    gciDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    gciNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                } else if (idx === 5) {
+                    eilScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    eilDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    eilNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                }
+
                 row.push(testData.score);
                 row.push(testData.displayValue);
                 row.push(testData.numericValue);
             });
             workbook.addDataRow(row);
         });
+
+        // add avg row
+        workbook.addDataRow([
+            'AVG SCORES: ',
+            Math.round(fcpScore / 10 * 100) / 100, Math.round(fcpDisplayVal / 10 * 100) / 100, Math.round(fcpNumericVal / 10 * 100) / 100,
+            Math.round(siScore / 10 * 100) / 100, Math.round(siDisplayVal / 10 * 100) / 100, Math.round(siNumericVal / 10 * 100) / 100,
+            Math.round(ttiScore / 10 * 100) / 100, Math.round(ttiDisplayVal / 10 * 100) / 100, Math.round(ttiNumericVal / 10 * 100) / 100,
+            Math.round(fmpScore / 10 * 100) / 100, Math.round(fmpDisplayVal / 10 * 100) / 100, Math.round(fmpNumericVal / 10 * 100) / 100,
+            Math.round(gciScore / 10 * 100) / 100, Math.round(gciDisplayVal / 10 * 100) / 100, Math.round(gciNumericVal / 10 * 100) / 100,
+            Math.round(eilScore / 10 * 100) / 100, Math.round(eilDisplayVal / 10 * 100) / 100, Math.round(eilNumericVal / 10 * 100) / 100,
+        ])
 
     });
 
@@ -216,3 +289,40 @@ const { ExcelWorkbook } = require('./excel');
 
     return true;
 })();
+
+// (async () => {
+//     // baseline report - create excel
+//     const workbook = new ExcelWorkbook(
+//         creator='DavidDee',
+//         initData={
+//             startTime: new Date().toTimeString(),
+//         },
+//     );
+//     await workbook.initWorkbook();
+
+//     const reportNum = 3;
+//     for (i=0; i < reportNum; i++) {
+//         console.log(`Running baseline PageSpeed Test: ${i + 1}`);
+//         process.env.GOOGLE_PAGESPEED_API_KEY = 'AIzaSyBsRHbIphsFRRgra7vefj1uKHLdPAuQxsc';
+//         const results = await ps.runPagespeedApi('https://seo-testing1.netlify.app/');
+        
+//         const row = [i + 1];
+//         if (results.error) {
+//             row.push(results.error);
+//         } else {
+//             // add data
+//             Object.values(results).forEach((result) => {
+//                 row.push(result.score);
+//                 row.push(result.displayValue);
+//                 row.push(result.numericValue);
+//             });
+//         }
+//         console.log(row);
+//         workbook.addDataRow(row);
+
+//         // save to excel
+//         await workbook.saveWorkbookAsFile();
+
+//         await sleep(3000);
+//     }
+// })()

@@ -1,11 +1,10 @@
-const _ = require("lodash");
 const puppeteer = require("puppeteer");
 const fetch = require("node-fetch");
 const fs = require("fs-extra");
 
 const { ExcelWorkbook } = require('./excel');
-const scrape = require("./scrape");
-const { saveReportAsJson, saveToJson, readJson, sleep, getFileExtension } = require('./utils');
+const git = require('./git');
+const { saveToJson, readJson, sleep, getFileExtension } = require('./utils');
 const { timestamp, psc } = require("./settings");
 
 
@@ -13,8 +12,12 @@ async function _newBrowser() {
     var browser = await puppeteer.launch({
         // executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
         ignoreDefaultArgs: true,
-        headless: true,
-        defaultViewport: null,
+        headless: false,
+        devtools: true,
+        ignoreHTTPSErrors: true,
+        args: [
+            '--incognito'
+        ],
     });
 
     var page = await browser.newPage();
@@ -27,8 +30,8 @@ async function _newBrowser() {
         'Accept-Language': 'en-US,en;q=0.9'
     });
 
-    // await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36');
-    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36');
+    await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1');;
+    // await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36');
 
     await page.setViewport({
         width: 375,
@@ -40,6 +43,7 @@ async function _newBrowser() {
 };
 
 function _setUpQuery(url) {
+    const apiKey = process.env.GOOGLE_PAGESPEED_API_KEY || '';
     const api = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
     const parameters = {
       url: encodeURIComponent(url || '')
@@ -48,6 +52,7 @@ function _setUpQuery(url) {
     for (key in parameters) {
       query += `${key}=${parameters[key]}`;
     }
+    query += `&key=${apiKey}`;
     return query;
 };
 
@@ -69,9 +74,14 @@ async function runPagespeedApi(url=process.env.NETLIFY_SITE_1_URL) {
               'Estimated Input Latency': lighthouse.audits['estimated-input-latency']
             };
             return lighthouseMetrics;
-        };
+        } else if (json.error) {
+            return {
+                'error': `Error ${json.error.code}: ${json.error.message}`
+            }
+        }
+        console.log(json);
         return {
-            'Error': 'PageSpeed API failed to retrieve report'
+            'error': 'PageSpeed API failed to retrieve report'
         };
       });
       return results;
@@ -79,7 +89,6 @@ async function runPagespeedApi(url=process.env.NETLIFY_SITE_1_URL) {
 
 async function scrapeElemsAndTest(page) {
     const testFileName = process.env.TEST_FILE_NAME;
-
     // inject functions into puppeteer browser
     await page.exposeFunction('saveToJson', saveToJson);
     await page.exposeFunction('readJson', readJson);
@@ -88,7 +97,7 @@ async function scrapeElemsAndTest(page) {
     await page.exposeFunction('downloadAndReplacePage', (async (repoID) => {
     console.log('downloading page...');
     const htmlContent = await page.content();
-    fs.writeFileSync(`./baseScrapeData${repoID}/index.html`, htmlContent, (error) => {console.log(error)});
+    fs.writeFileSync(`../seo-testing${repoID}/index.html`, htmlContent, (error) => {console.log(error)});
     return true;
     }));
 
@@ -99,15 +108,15 @@ async function scrapeElemsAndTest(page) {
     });
     }));
 
-    await page.exposeFunction('gitPushData', (async (repoID) => {
+    await page.exposeFunction('pushElemChange', (async (repoID) => {
         console.log('git pushing latest HTML changes...');
-        scrape.gitPushScrapeData(repoID);
+        git.pushElemChange(repoID);
     }));
 
     await page.exposeFunction('getFileExtension', (fileStr) => {
         return getFileExtension(fileStr);
     });
-
+    console.log('Initializing page evaluations...');
     await page.evaluate(async (psc, testFileName) => {
     let testElems = [];
     // let allHtml = document.querySelectorAll([
@@ -137,7 +146,7 @@ async function scrapeElemsAndTest(page) {
         const height = elem.height;
         const width = elem.width;
         const topElementText = elem?.firstChild?.nodeValue?.replace(/\s+/g, '') || '';
-        const elemLimit = 3;
+        const elemLimit = 15;
 
         const elemData = {
             action: '',
@@ -375,7 +384,7 @@ async function scrapeElemsAndTest(page) {
             await window.downloadAndReplacePage(1);
 
             // update webhost files
-            await window.gitPushData(1);
+            await window.pushElemChange(1);
 
             // add element back
             parent.appendChild(element);
@@ -433,7 +442,7 @@ async function scrapeElemsAndTest(page) {
             await window.downloadAndReplacePage(2);
 
             // update webhost files
-            await window.gitPushData(2);
+            await window.pushElemChange(2);
 
             // add element back
             parent.appendChild(element);
@@ -489,7 +498,7 @@ async function scrapeElemsAndTest(page) {
             await window.downloadAndReplacePage(3);
 
             // update webhost files
-            await window.gitPushData(3);
+            await window.pushElemChange(3);
 
             // add element back
             parent.appendChild(element);
@@ -527,9 +536,9 @@ async function scrapeElemsAndTest(page) {
     const results2 = `${resultFileName}2`;
     const results3 = `${resultFileName}3`;
 
-    const data1 = readJson(results1);
-    const data2 = readJson(results2);
-    const data3 = readJson(results3);
+    const data1 = await readJson(results1) || [];
+    const data2 = await readJson(results2) || [];
+    const data3 = await readJson(results3) || [];
 
     const allData = data1.concat(data2).concat(data3);
 
@@ -546,24 +555,92 @@ async function scrapeElemsAndTest(page) {
 
     // iterate through all elements
     allData.forEach((elemData) => {
+        function parseStringToNumber(stringVal) {
+            if (typeof stringVal == 'string') {
+                return Number(stringVal.replace(/[^.0-9]/g, ''));
+            }
+            return 0;
+        };
+
         const elementType = elemData['element'];
         const src = elemData['src'];
         const results = elemData['results'];
 
         // add new section
         workbook.addNewSection(elementType, src);
+
+        // avg scores
+        let fcpScore = 0;
+        let siScore = 0;
+        let ttiScore = 0;
+        let fmpScore = 0;
+        let gciScore = 0;
+        let eilScore = 0;
+
+        // avg display values
+        let fcpDisplayVal = 0;
+        let siDisplayVal = 0;
+        let ttiDisplayVal = 0;
+        let fmpDisplayVal = 0;
+        let gciDisplayVal = 0;
+        let eilDisplayVal = 0;
+
+        // avg numeric values
+        let fcpNumericVal = 0;
+        let siNumericVal = 0;
+        let ttiNumericVal = 0;
+        let fmpNumericVal = 0;
+        let gciNumericVal = 0;
+        let eilNumericVal = 0;
         
         // iterate through each element's test results
         results.forEach((result, index) => {
             // iterate through each result types
             const row = [index + 1];
-            Object.values(result).forEach((testData) => {
+            Object.values(result).forEach((testData, idx) => {
+                if (idx === 0) {
+                    fcpScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    fcpDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    fcpNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                } else if (idx === 1) {
+                    siScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    siDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    siNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                } else if (idx === 2) {
+                    ttiScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    ttiDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    ttiNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                } else if (idx === 3) {
+                    fmpScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    fmpDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    fmpNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                } else if (idx === 4) {
+                    gciScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    gciDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    gciNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                } else if (idx === 5) {
+                    eilScore += Number(testData.score) ? Number(testData.score) : parseStringToNumber(testData.score);
+                    eilDisplayVal += Number(testData.displayValue) ? Number(testData.displayValue) : parseStringToNumber(testData.displayValue);
+                    eilNumericVal += Number(testData.numericValue) ? Number(testData.numericValue) : parseStringToNumber(testData.numericValue);
+                }
+
                 row.push(testData.score);
                 row.push(testData.displayValue);
                 row.push(testData.numericValue);
             });
             workbook.addDataRow(row);
         });
+
+        // add avg row
+        workbook.addDataRow([
+            'AVG SCORES: ',
+            Math.round(fcpScore / 10 * 100) / 100, Math.round(fcpDisplayVal / 10 * 100) / 100, Math.round(fcpNumericVal / 10 * 100) / 100,
+            Math.round(siScore / 10 * 100) / 100, Math.round(siDisplayVal / 10 * 100) / 100, Math.round(siNumericVal / 10 * 100) / 100,
+            Math.round(ttiScore / 10 * 100) / 100, Math.round(ttiDisplayVal / 10 * 100) / 100, Math.round(ttiNumericVal / 10 * 100) / 100,
+            Math.round(fmpScore / 10 * 100) / 100, Math.round(fmpDisplayVal / 10 * 100) / 100, Math.round(fmpNumericVal / 10 * 100) / 100,
+            Math.round(gciScore / 10 * 100) / 100, Math.round(gciDisplayVal / 10 * 100) / 100, Math.round(gciNumericVal / 10 * 100) / 100,
+            Math.round(eilScore / 10 * 100) / 100, Math.round(eilDisplayVal / 10 * 100) / 100, Math.round(eilNumericVal / 10 * 100) / 100,
+        ]);
 
     });
 
@@ -651,7 +728,7 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_SITE_1_URL) {
         currentTestData2 = await readJson(testFileName2);
         currentTestData3 = await readJson(testFileName3);
         await sleep(2000);
-        console.log('Waiting for initial git push to complete...');
+        console.log(`Waiting for initial git push to complete... [test-branch-1: ${currentTestData1.initialized ? 'COMPLETE' : 'INCOMPLETE'}] - [test-branch-2: ${currentTestData2.initialized ? 'COMPLETE' : 'INCOMPLETE'}] - [test-branch-1: ${currentTestData3.initialized ? 'COMPLETE' : 'INCOMPLETE'}]`);
     }
 
     // baseline report - create excel
@@ -666,25 +743,30 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_SITE_1_URL) {
     // init new section for elem
     workbook.addNewSection('Baseline with all elements', '*');
 
+    console.log('Baseline Testing URL: ' + process.env.NETLIFY_SITE_1_URL);
     const reportNum = 3;
     for (i=0; i < reportNum; i++) {
         console.log(`Running baseline PageSpeed Test: ${i + 1}`);
         const results = await runPagespeedApi(process.env.NETLIFY_SITE_1_URL);
         
-        // add data
         const row = [i + 1];
-        Object.values(results).forEach((result) => {
-            row.push(result.score);
-            row.push(result.displayValue);
-            row.push(result.numericValue);
-        });
+        if (results.error) {
+            row.push(results.error);
+        } else {
+            // add data
+            Object.values(results).forEach((result) => {
+                row.push(result.score);
+                row.push(result.displayValue);
+                row.push(result.numericValue);
+            });
+        }
+
         workbook.addDataRow(row);
 
         // save to excel
         await workbook.saveWorkbookAsFile();
-        console.log('baseline sleeping..');
-        await sleep(15000);
-        console.log('baseline sleeping over');
+
+        await sleep(5000);
     }
 
     // init browser

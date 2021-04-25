@@ -4,8 +4,6 @@ while getopts ":a:p:" opt; do
   case $opt in
     a) arg_1="$OPTARG"
     ;;
-    p) p_out="$OPTARG"
-    ;;
     \?) echo "Invalid option -$OPTARG" >&2
     ;;
   esac
@@ -18,9 +16,10 @@ cd "$PROJECT_PATH"
 
 # create .git
 git init
-git remote add origin https://github.com/davidd94/seo-testing$arg_1.git
+git remote add origin https://github.com/davidd94/seo-testing.git
 
 # git actions
+git switch -c test-branch-$arg_1
 git add .
 git commit -m 'seo testing'
-git push origin master --force
+git push origin test-branch-$arg_1 --force

@@ -6,6 +6,7 @@ const dotenv = require("dotenv");
 const { ExcelWorkbook } = require('./excel');
 const ps = require("./pagespeed");
 const scraper = require("./scrape");
+const git = require('./git');
 const { saveToJson, readJson, sleep } = require('./utils');
 
 // Setup env vars
@@ -13,9 +14,9 @@ dotenv.config();
 
 async function initPagespeedEval() {
     const scrapeResults = await scraper.scrapeAndDownloadPage().then(async () => {
-        const result1 = await scraper.gitPushScrapeData(1);
-        const result2 = await scraper.gitPushScrapeData(2);
-        const result3 = await scraper.gitPushScrapeData(3);
+        const result1 = await git.forcePushScrapeData(1);
+        const result2 = await git.forcePushScrapeData(2);
+        const result3 = await git.forcePushScrapeData(3);
         return result1 && result2 && result3;
     });
 
@@ -90,16 +91,20 @@ initPagespeedEval().then(async (succeeded) => {
 
                     // run test X amount and record
                     while (currentTestNum <= maxTestNum) {
+                        // PageSpeed API limits 240 reqs/min
                         console.log(`Running PageSpeed API test (ID: ${hookSiteID}): # ${currentTestNum}`);
-        
+
                         // run pagespeed API
                         const results = await ps.runPagespeedApi(siteURL);
 
-                        testResult['results'].push(results);
+                        if (results.error) {
+                            testResult['results'].push(results.error);
+                        } else {
+                            testResult['results'].push(results);
+                        }
                 
                         currentTestNum += 1;
-        
-                        await sleep(10000);
+                        await sleep(2000);
                     };
 
                     resultsData.push(testResult);
