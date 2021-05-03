@@ -1,6 +1,7 @@
 const puppeteer = require("puppeteer");
 const fetch = require("node-fetch");
 const fs = require("fs-extra");
+const PuppeteerHar = require('puppeteer-har/lib/PuppeteerHar');
 
 const { ExcelWorkbook } = require('./excel');
 const git = require('./git');
@@ -20,7 +21,7 @@ async function _newBrowser() {
         ],
     });
 
-    var page = await browser.newPage();
+    var [page] = await browser.pages();
 
     // console.log work inside page methods
     page.on('console', consoleObj => console.log(consoleObj.text()));
@@ -198,7 +199,7 @@ async function scrapeElemsAndTest(page) {
             };
             
             // Grab all src with suffix .js
-            const fileType = await window.getFileExtension(elem.src);
+            const fileType = window.getFileExtension(elem.src);
             if (fileType === 'js') {
                 elemData.action = 'remove';
                 elemData.element = elem;
@@ -283,7 +284,7 @@ async function scrapeElemsAndTest(page) {
         } else if (elem.tagName === 'LINK' && elem.href && linkCt < elemLimit) {
             // find .css files and rel="dns-prefetch" | "preconnect" | "preload"
             // NOTE: Does not count link inside iframes
-            const fileType = await window.getFileExtension(elem.href);
+            const fileType = window.getFileExtension(elem.href);
             const relType = elem.rel || '';
 
             if (
@@ -771,9 +772,13 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_SITE_1_URL) {
 
     // init browser
     const { browser, page } = await _newBrowser();
+    const har = new PuppeteerHar(page);
     
-    await page.goto(url);
+    await har.start({ path: `./evaluations/results.har` });
+    await page.goto(url, { waitUntil: 'networkidle2' });
     await page.waitForSelector('body');
+
+    await har.stop();
 
     // take init screenshot
     await page.screenshot({
@@ -795,3 +800,4 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_SITE_1_URL) {
 exports.runPagespeedApi = runPagespeedApi;
 exports.scrapeElemsAndTest = scrapeElemsAndTest;
 exports.pagespeedEvaluation = pagespeedEvaluation;
+exports.newBrowser = _newBrowser;

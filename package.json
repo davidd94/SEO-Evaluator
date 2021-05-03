@@ -19,7 +19,8 @@
     "inquirer": "^7.3.3",
     "lodash": "^4.17.20",
     "node-fetch": "^2.6.1",
-    "puppeteer": "^5.5.0"
+    "puppeteer": "^5.5.0",
+    "puppeteer-har": "^1.1.2"
   },
   "devDependencies": {
     "website-scraper": "^4.2.3",

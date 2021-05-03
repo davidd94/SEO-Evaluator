@@ -29,7 +29,7 @@ async function scrapeAndDownloadPage(url=null) {
                 launchOptions: { 
                     // If you set this to false, the headless browser will show up on screen
                     // executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-                    headless: true,
+                    headless: false,
                     defaultViewport: null,
                 },
                 // scrollToBottom: {
@@ -41,6 +41,7 @@ async function scrapeAndDownloadPage(url=null) {
         ],
         request: {
             headers: {
+                'Accepted-Language': 'en-US,en;q=0.9',
                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36'
             }
         },
