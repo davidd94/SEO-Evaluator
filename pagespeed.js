@@ -74,13 +74,13 @@ async function runPagespeedApi(url=process.env.NETLIFY_SITE_1_URL) {
               'First CPU Idle': lighthouse.audits['first-cpu-idle'],
               'Estimated Input Latency': lighthouse.audits['estimated-input-latency']
             };
+            // get 'network-requests' for script auditing
             return lighthouseMetrics;
         } else if (json.error) {
             return {
                 'error': `Error ${json.error.code}: ${json.error.message}`
             }
         }
-        console.log(json);
         return {
             'error': 'PageSpeed API failed to retrieve report'
         };
@@ -729,7 +729,7 @@ async function pagespeedEvaluation(url=process.env.NETLIFY_SITE_1_URL) {
         currentTestData2 = await readJson(testFileName2);
         currentTestData3 = await readJson(testFileName3);
         await sleep(2000);
-        console.log(`Waiting for initial git push to complete... [test-branch-1: ${currentTestData1.initialized ? 'COMPLETE' : 'INCOMPLETE'}] - [test-branch-2: ${currentTestData2.initialized ? 'COMPLETE' : 'INCOMPLETE'}] - [test-branch-1: ${currentTestData3.initialized ? 'COMPLETE' : 'INCOMPLETE'}]`);
+        console.log(`Waiting for initial git push to complete... [test-branch-1: ${currentTestData1.initialized ? 'COMPLETE' : 'INCOMPLETE'}] - [test-branch-2: ${currentTestData2.initialized ? 'COMPLETE' : 'INCOMPLETE'}] - [test-branch-3: ${currentTestData3.initialized ? 'COMPLETE' : 'INCOMPLETE'}]`);
     }
 
     // baseline report - create excel

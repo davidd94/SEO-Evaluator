@@ -308,7 +308,7 @@ const PuppeteerHar = require('puppeteer-har/lib/PuppeteerHar');
 //     const reportNum = 3;
 //     for (i=0; i < reportNum; i++) {
 //         console.log(`Running baseline PageSpeed Test: ${i + 1}`);
-//         process.env.GOOGLE_PAGESPEED_API_KEY = 'AIzaSyBsRHbIphsFRRgra7vefj1uKHLdPAuQxsc';
+//         process.env.GOOGLE_PAGESPEED_API_KEY = '';
 //         const results = await ps.runPagespeedApi('https://seo-testing1.netlify.app/');
         
 //         const row = [i + 1];
@@ -375,27 +375,29 @@ const PuppeteerHar = require('puppeteer-har/lib/PuppeteerHar');
 // })();
 
 (async () => {
-    const har = await fs.readFile('./evaluations/results.har');
-    const data = har.toString('utf8');
-    const dataJSON = JSON.parse(data);
-    const responses = dataJSON.log.entries;
+    // const har = await fs.readFile('./evaluations/results.har');
+    // const data = har.toString('utf8');
+    // const dataJSON = JSON.parse(data);
+    // const responses = dataJSON.log.entries;
 
-    const filteredResponses = _.chain(responses)
-        .filter((res) => {
-            const fileType = util.getFileExtension(res.request.url);
-            // return fileType === 'js';
-            return true;
-        })
-        .orderBy('time', 'desc')
-        .value()
+    // const filteredResponses = _.chain(responses)
+    //     .filter((res) => {
+    //         const fileType = util.getFileExtension(res.request.url);
+    //         // return fileType === 'js';
+    //         return true;
+    //     })
+    //     .orderBy('time', 'desc')
+    //     .value()
     
-    console.log(responses.length);
-    console.log(filteredResponses.length);
+    // console.log(responses.length);
+    // console.log(filteredResponses.length);
 
-    // _.forEach(filteredResponses, (res) => console.log(res.request.url, ' | ', `Time: ${res.time} ms`, ' | ', `Request Time: ${res._requestTime} ms`));
+    // // _.forEach(filteredResponses, (res) => console.log(res.request.url, ' | ', `Time: ${res.time} ms`, ' | ', `Request Time: ${res._requestTime} ms`));
     
-    console.log(filteredResponses[0]);
-    console.log(filteredResponses[0].request.url);
-    console.log('time: ', filteredResponses[0].time);
-    console.log('request time: ', filteredResponses[0]._requestTime);
+    // console.log(filteredResponses[0]);
+    // console.log(filteredResponses[0].request.url);
+    // console.log('time: ', filteredResponses[0].time);
+    // console.log('request time: ', filteredResponses[0]._requestTime);
+    process.env.GOOGLE_PAGESPEED_API_KEY = '';
+    await ps.runPagespeedApi('https://seo-testing1.netlify.app/');
 })();
